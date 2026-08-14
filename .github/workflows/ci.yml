@@ -2,7 +2,9 @@ name: tests
 
 on:
   push:
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
 
 jobs:
   test:
@@ -18,7 +20,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install (with dev extras: pytest + yara-python)
+      - name: Install with dev extras (pytest and yara-python)
         run: pip install -e ".[dev]"
 
       - name: Run test suite
