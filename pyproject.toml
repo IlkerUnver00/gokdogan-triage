@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peregrine-triage"
+version = "0.1.0"
+description = "Static PE malware triage engine: imphash, entropy, packer detection, string classification, capability tagging, YARA, weighted verdict."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "İlker Ünver" }]
+keywords = ["malware", "triage", "PE", "yara", "dfir", "static-analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+]
+dependencies = ["pefile>=2023.2.7", "ppdeep>=20200505"]
+
+[project.optional-dependencies]
+yara = ["yara-python>=4.3"]
+tlsh = ["py-tlsh>=4.7"]
+dev = ["pytest>=7.4", "yara-python>=4.3"]
+
+[project.scripts]
+peregrine = "peregrine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["peregrine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
