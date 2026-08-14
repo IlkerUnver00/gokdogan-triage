@@ -1,5 +1,9 @@
 # peregrine 🦅
 
+[![tests](https://github.com/IlkerUnver00/peregrine-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/peregrine-triage/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![license](https://img.shields.io/badge/license-MIT-green)](#license)
+
 **Static PE malware triage engine.** Feed it a Windows executable; it extracts
 static features — hashes, imphash, per-section entropy, packer artifacts,
 classified strings, import-based capability tags, YARA matches — and produces a
