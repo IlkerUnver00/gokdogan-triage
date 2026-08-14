@@ -18,7 +18,9 @@ analyst's attention.
 > real malware only inside an isolated analysis VM.
 
 > 📐 **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) (English) ·
-> [MIMARI.md](MIMARI.md) (Türkçe) · [mimari.html](mimari.html) (visual, standalone)
+> [MIMARI.md](MIMARI.md) (Türkçe) ·
+> **[live visual page ↗](https://ilkerunver00.github.io/peregrine-triage/)**
+> ([source](docs/index.html))
 
 ## What it does
 
