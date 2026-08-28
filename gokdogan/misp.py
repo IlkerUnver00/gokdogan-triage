@@ -53,6 +53,13 @@ def to_misp_event(report: TriageReport) -> dict[str, Any]:
             seen.add((misp_type, dec.value))
             attrs.append(_attr(misp_type, dec.value, "Network activity"))
 
+    # Extracted family config as attributes (webhooks/urls as url, else text).
+    for cfg in report.config_extractions:
+        atype = "url" if cfg.value.lower().startswith("http") else "text"
+        if (atype, cfg.value) not in seen:
+            seen.add((atype, cfg.value))
+            attrs.append(_attr(atype, cfg.value, "Payload delivery"))
+
     tags = [{"name": f'gokdogan:verdict="{report.verdict.value}"'}]
     for tech in report.attack:
         tags.append({"name": f'misp-galaxy:mitre-attack-pattern="{tech.id}"'})

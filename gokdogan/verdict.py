@@ -67,6 +67,13 @@ def score_report(report: TriageReport) -> None:
         entries.append(ScoreEntry(min(8 * len(hidden), 24),
                                   f"{len(hidden)} encoded IOC/payload string(s) recovered"))
 
+    # Extracted family config (a Discord webhook, Telegram token, stager URL)
+    # is about as close to a smoking gun as static triage gets.
+    if report.config_extractions:
+        families = sorted({c.family for c in report.config_extractions})
+        entries.append(ScoreEntry(min(15 * len(families), 30),
+                                  f"extracted config: {', '.join(families)}"))
+
     # Authenticode: a *verified* signature is a real mitigation; a tampered
     # or revoked one is damning; a present-but-unverified blob is a weak
     # mitigation (unsigned + suspicious is the more common malware shape).

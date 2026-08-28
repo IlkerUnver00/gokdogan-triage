@@ -11,6 +11,7 @@ from .decoded import recover_encoded_strings
 from .dotnet import analyze_dotnet
 from .entropy import shannon_entropy
 from .exports import parse_exports
+from .extractors import extract_config
 from .hashes import impfuzzy
 from .loader import (
     NotAPEError,
@@ -87,6 +88,7 @@ def triage(
     packer = detect_packer(sections, import_count)
     string_hits, string_stats = analyze_strings(data, min_string_length)
     decoded_strings = recover_encoded_strings(data)
+    config_extractions = extract_config(data, [d.value for d in decoded_strings])
     capabilities = infer_capabilities(
         merged_imports, string_hits, resources, exports, decoded_strings, config_blobs, overlay
     )
@@ -115,6 +117,7 @@ def triage(
         strings=string_hits,
         string_stats=string_stats,
         decoded_strings=decoded_strings,
+        config_extractions=config_extractions,
         capabilities=capabilities,
         attack=attack,
         yara=yara_hits,

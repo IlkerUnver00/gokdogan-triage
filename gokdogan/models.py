@@ -145,6 +145,13 @@ class ConfigBlob:
 
 
 @dataclass
+class ConfigField:
+    family: str          # e.g. "Discord webhook", "Telegram bot"
+    key: str             # e.g. "webhook", "bot_token", "url"
+    value: str
+
+
+@dataclass
 class DecodedString:
     value: str
     encoding: str        # e.g. "xor-0x5a", "add-0x0d", "rol-3", "base64"
@@ -213,6 +220,7 @@ class TriageReport:
     strings: list[StringHit] = field(default_factory=list)
     string_stats: dict[str, int] = field(default_factory=dict)
     decoded_strings: list[DecodedString] = field(default_factory=list)
+    config_extractions: list[ConfigField] = field(default_factory=list)
     capabilities: list[Capability] = field(default_factory=list)
     attack: list[AttackTechnique] = field(default_factory=list)
     yara: list[YaraHit] = field(default_factory=list)

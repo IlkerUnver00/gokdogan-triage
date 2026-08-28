@@ -147,6 +147,7 @@ def render_html(report: TriageReport) -> str:
     parts.append(_overlay(report))
     parts.append(_config_blobs(report))
     parts.append(_resources(report))
+    parts.append(_config_extractions(report))
     parts.append(_decoded(report))
     parts.append(_strings(report))
     parts.append(_yara(report))
@@ -230,6 +231,18 @@ def _sections(report: TriageReport) -> str:
             f"<th></th><th>perms</th><th>flags</th></tr>{''.join(rows)}"
             f"<tr><td colspan='6' class='muted'>overall file entropy: "
             f"{report.overall_entropy:.2f}</td></tr></table></div>")
+
+
+def _config_extractions(report: TriageReport) -> str:
+    if not report.config_extractions:
+        return ""
+    rows = "".join(
+        f"<tr><td><b>{_esc(c.family)}</b></td><td class='mono'>{_esc(c.key)}</td>"
+        f"<td class='mono'>{_esc(c.value[:300])}</td></tr>"
+        for c in report.config_extractions
+    )
+    return ("<h2>Extracted config</h2><div class='card'><table>"
+            f"<tr><th>family</th><th>key</th><th>value</th></tr>{rows}</table></div>")
 
 
 def _overlay(report: TriageReport) -> str:

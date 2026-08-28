@@ -23,7 +23,7 @@ FIELDS = [
     "imphash", "impfuzzy", "authentihash", "rich_hash", "ssdeep",
     "packer", "capabilities", "attack", "yara",
     "embedded_pe", "encoded_strings", "config_blobs", "anomalies",
-    "overlay", "vt", "mb_family",
+    "overlay", "extracted_config", "vt", "mb_family",
 ]
 
 
@@ -78,6 +78,7 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
         "config_blobs": len(report.config_blobs),
         "anomalies": len(report.anomalies),
         "overlay": _overlay(report),
+        "extracted_config": sorted({c.family for c in report.config_extractions}),
         "vt": vt,
         "mb_family": mb_family,
     }

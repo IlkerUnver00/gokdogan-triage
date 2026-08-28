@@ -261,6 +261,11 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         if len(report.decoded_strings) > 15:
             stream.write(c(_DIM, f"  … +{len(report.decoded_strings) - 15} more\n"))
 
+    if report.config_extractions:
+        header("Extracted config")
+        for cfg in report.config_extractions:
+            stream.write(c(_RED, f"  {cfg.family} — {cfg.key}: ") + f"{cfg.value[:120]}\n")
+
     header("YARA")
     if report.yara_error:
         stream.write(c(_DIM, f"  ({report.yara_error})\n"))
