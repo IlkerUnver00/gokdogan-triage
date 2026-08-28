@@ -21,8 +21,10 @@ from .loader import (
 )
 from .models import TriageReport
 from .packers import detect_packer
+from .models import SignatureInfo
 from .resources import resource_anomalies, walk_resources
 from .rich import parse_rich_header
+from .signature import verify as verify_signature_file
 from .strings_ext import analyze_strings
 from .verdict import score_report
 from .yara_scan import scan as yara_scan
@@ -35,6 +37,7 @@ def triage(
     rules_dir: str | Path | None = None,
     min_string_length: int = 6,
     use_yara: bool = True,
+    verify_signature: bool = True,
 ) -> TriageReport:
     """Run the full static triage pipeline on one PE file."""
     pe, data = load_pe(path)
@@ -51,8 +54,20 @@ def triage(
     finally:
         pe.close()
 
+    # Authenticode verification (offline, Windows-only) — only when a blob
+    # is actually present, so unsigned malware pays no cost.
+    if verify_signature and file_info.is_signed:
+        signature = verify_signature_file(str(path))
+    elif file_info.is_signed:
+        signature = SignatureInfo(status="unverified", present=True,
+                                  note="verification skipped")
+    else:
+        signature = SignatureInfo(status="unsigned", present=False)
+
     if rich is not None and rich.checksum_valid is False:
         anomalies.append("Rich header checksum invalid (toolchain header forged or copied)")
+    if signature.status in ("tampered", "revoked"):
+        anomalies.append(f"Authenticode signature {signature.status}: {signature.note}")
     anomalies.extend(resource_anomalies(resources))
 
     # Delay-loaded APIs count for capability inference just like normal ones.
@@ -77,6 +92,7 @@ def triage(
 
     report = TriageReport(
         file=file_info,
+        signature=signature,
         rich=rich,
         sections=sections,
         resources=resources,

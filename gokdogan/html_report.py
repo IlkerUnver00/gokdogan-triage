@@ -72,6 +72,19 @@ def _esc(value) -> str:
     return escape(str(value))
 
 
+def _signature_html(report: TriageReport) -> str:
+    sig = report.signature
+    if sig is None or not sig.present:
+        return "unsigned"
+    signer = f" — {_esc(sig.signer)}" if sig.signer else ""
+    good = sig.status == "valid"
+    bad = sig.status in ("tampered", "revoked")
+    color = "var(--clean)" if good else ("var(--risk)" if bad else "var(--suspicious)")
+    label = sig.status.upper() if bad else sig.status
+    return (f'<b style="color:{color}">{_esc(label)}</b>{signer}'
+            f'<span class="muted"> — {_esc(sig.note)}</span>')
+
+
 def render_html(report: TriageReport) -> str:
     f = report.file
     vclass = _VERDICT_CLASS[report.verdict]
@@ -112,7 +125,7 @@ def render_html(report: TriageReport) -> str:
         ("rich_hash", f'<span class="mono">{_esc(report.rich.hash) if report.rich else "-"}</span>'),
         ("ssdeep", f'<span class="mono">{_esc(f.ssdeep or "-")}</span>'),
         ("compiled", ts),
-        ("signed", "yes (blob present, unverified)" if f.is_signed else "no"),
+        ("signature", _signature_html(report)),
         ("entrypoint", f'0x{f.entry_point:x} in {_esc(f.entry_section or "?")}'),
     ]
     parts.append("<h2>File</h2><div class='card'><dl class='grid'>")

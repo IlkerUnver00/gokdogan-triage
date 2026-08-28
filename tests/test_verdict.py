@@ -2,6 +2,7 @@ from gokdogan.models import (
     Capability,
     FileInfo,
     PackerInfo,
+    SignatureInfo,
     TriageReport,
     Verdict,
     YaraHit,
@@ -65,19 +66,40 @@ def test_yara_weight_meta_is_honored():
     assert report.verdict == Verdict.SUSPICIOUS
 
 
-def test_signature_mitigates():
-    unsigned = TriageReport(
-        file=_file_info(),
-        capabilities=[Capability("network", "talks", 2, ["socket", "connect"]),
-                      Capability("execution", "runs", 1, ["CreateProcessW"]),
-                      Capability("persistence-registry", "registry", 2, ["RegSetValueExW"]),
-                      Capability("crypto", "crypto", 2, ["CryptEncrypt", "CryptGenKey"]),
-                      Capability("screen-capture", "grabs", 2, ["BitBlt", "GetDC", "GetDIBits"])],
-    )
-    signed = TriageReport(file=_file_info(is_signed=True), capabilities=list(unsigned.capabilities))
-    score_report(unsigned)
+def _suspicious_caps():
+    return [Capability("network", "talks", 2, ["socket", "connect"]),
+            Capability("execution", "runs", 1, ["CreateProcessW"]),
+            Capability("persistence-registry", "registry", 2, ["RegSetValueExW"]),
+            Capability("crypto", "crypto", 2, ["CryptEncrypt", "CryptGenKey"]),
+            Capability("screen-capture", "grabs", 2, ["BitBlt", "GetDC", "GetDIBits"])]
+
+
+def test_unverified_signature_mitigates_by_8():
+    base = TriageReport(file=_file_info(), capabilities=_suspicious_caps())
+    signed = TriageReport(file=_file_info(is_signed=True), capabilities=_suspicious_caps(),
+                          signature=SignatureInfo(status="expired", present=True))
+    score_report(base)
     score_report(signed)
-    assert signed.score == unsigned.score - 8
+    assert signed.score == base.score - 8
+
+
+def test_valid_signature_mitigates_more():
+    base = TriageReport(file=_file_info(), capabilities=_suspicious_caps())
+    valid = TriageReport(file=_file_info(is_signed=True), capabilities=_suspicious_caps(),
+                         signature=SignatureInfo(status="valid", present=True, verified=True,
+                                                 signer="Contoso Ltd"))
+    score_report(base)
+    score_report(valid)
+    assert valid.score == base.score - 15
+
+
+def test_tampered_signature_penalizes():
+    report = TriageReport(file=_file_info(is_signed=True),
+                          signature=SignatureInfo(status="tampered", present=True))
+    score_report(report)
+    assert any(e.points == 30 for e in report.score_breakdown)
+    # a tampered signature alone is enough to warrant a second look
+    assert report.verdict == Verdict.SUSPICIOUS
 
 
 def test_score_never_negative():

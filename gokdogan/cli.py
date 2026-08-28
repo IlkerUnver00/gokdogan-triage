@@ -102,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="MalwareBazaar Auth-Key (or set MB_API_KEY)")
     parser.add_argument("--rules", metavar="DIR", help="YARA rules directory (default: bundled rules/)")
     parser.add_argument("--no-yara", action="store_true", help="skip YARA scanning")
+    parser.add_argument("--no-verify-sig", action="store_true",
+                        help="skip Authenticode signature verification (Windows-only, offline)")
     parser.add_argument("--min-strlen", type=int, default=6, metavar="N",
                         help="minimum string length to extract (default 6)")
     parser.add_argument("--quiet", action="store_true", help="one summary line per file instead of a full report")
@@ -148,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
                 rules_dir=args.rules,
                 min_string_length=args.min_strlen,
                 use_yara=not args.no_yara,
+                verify_signature=not args.no_verify_sig,
             )
         except NotAPEError as exc:
             print(f"skipped: {exc}", file=sys.stderr)

@@ -40,6 +40,16 @@ class FileInfo:
 
 
 @dataclass
+class SignatureInfo:
+    status: str          # valid | tampered | expired | untrusted | revoked | unsigned | invalid | unavailable
+    present: bool = False   # an actual signature was found
+    verified: bool | None = None  # True=valid chain, False=present-but-invalid, None=couldn't check
+    signer: str = ""     # signer certificate common name
+    issuer: str = ""     # issuer certificate common name
+    note: str = ""
+
+
+@dataclass
 class RichEntry:
     prod_id: int         # @comp.id product id (tool identity)
     build: int           # tool build number (precise version)
@@ -167,6 +177,7 @@ class ScoreEntry:
 @dataclass
 class TriageReport:
     file: FileInfo
+    signature: "SignatureInfo | None" = None
     rich: "RichHeader | None" = None
     sections: list[SectionInfo] = field(default_factory=list)
     resources: list[ResourceInfo] = field(default_factory=list)

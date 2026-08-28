@@ -55,6 +55,7 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Entropy** | Shannon entropy per section + overall | executable code sits ~6 bits/byte; ≥7.2 means compressed/encrypted content |
 | **Packer detection** | known section names (UPX, VMProtect, Themida, …) + structural heuristics | packing is the single cheapest evasion; heuristics survive renamed sections |
 | **Anomalies** | W+X sections, TLS callbacks, wiped timestamps, missing imports, oversized overlay, bad checksum | things real compilers rarely produce |
+| **Authenticode** | real signature **verification** via Windows `WinVerifyTrust` (offline) + signer/issuer names | distinguishes a *valid* signature from a **tampered** one (digest mismatch = modified after signing), expired, or untrusted-root — a strong trojanized-binary tell |
 | **Strings** | ASCII + UTF-16LE extraction, regex classification (URL, IP, domain, registry, PDB path, shell command, user-agent) | fastest source of IOCs and intent; CA/vendor noise is filtered out |
 | **Encoded strings (FLOSS-lite)** | brute-force **single-byte XOR/ADD/ROL** + **Base64/hex** recovery of hidden IOCs and embedded PEs | surfaces the C2/commands malware encodes to dodge a plain `strings` pass — via a fast key-invariant adjacency search, not code emulation |
 | **Config blobs** | **entropy islands** — localized high-entropy regions inside calm writable sections | spots an encrypted config/staged payload hiding in `.data` without decrypting it; read-only `.rdata` cert data is excluded so clean binaries stay quiet |

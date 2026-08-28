@@ -62,6 +62,20 @@ def _use_color(stream: TextIO) -> bool:
     return hasattr(stream, "isatty") and stream.isatty()
 
 
+def _signature_line(report: TriageReport, c) -> str:
+    sig = report.signature
+    if sig is None or not sig.present:
+        return "no"
+    signer = f" — {sig.signer}" if sig.signer else ""
+    if sig.status == "valid":
+        return c(_GREEN, f"VALID{signer}")
+    if sig.status in ("tampered", "revoked"):
+        return c(_RED, f"{sig.status.upper()}{signer} ({sig.note})")
+    if sig.status in ("expired", "untrusted", "invalid"):
+        return c(_YELLOW, f"{sig.status}{signer} ({sig.note})")
+    return f"present, {sig.status}{signer}"
+
+
 def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     color = _use_color(stream)
     stream = _SafeStream(stream)
@@ -94,7 +108,7 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     if f.compile_timestamp_anomaly:
         ts += c(_YELLOW, f"  [{f.compile_timestamp_anomaly}]")
     stream.write(f"  compiled   : {ts}\n")
-    stream.write(f"  signed     : {'yes (blob present, unverified)' if f.is_signed else 'no'}\n")
+    stream.write(f"  signed     : {_signature_line(report, c)}\n")
     stream.write(f"  entrypoint : 0x{f.entry_point:x} in {f.entry_section or '?'}\n")
 
     header("Sections")

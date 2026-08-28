@@ -67,11 +67,19 @@ def score_report(report: TriageReport) -> None:
         entries.append(ScoreEntry(min(8 * len(hidden), 24),
                                   f"{len(hidden)} encoded IOC/payload string(s) recovered"))
 
-    # Mitigating signal: an Authenticode blob doesn't prove the signature
-    # is valid (that needs online chain verification), but unsigned +
-    # suspicious is the more common malware shape.
-    if report.file.is_signed and entries:
-        entries.append(ScoreEntry(-8, "embedded Authenticode signature present (unverified)"))
+    # Authenticode: a *verified* signature is a real mitigation; a tampered
+    # or revoked one is damning; a present-but-unverified blob is a weak
+    # mitigation (unsigned + suspicious is the more common malware shape).
+    sig = report.signature
+    if sig is not None:
+        if sig.status == "valid" and entries:
+            entries.append(ScoreEntry(-15, f"Authenticode signature valid ({sig.signer or 'signed'})"))
+        elif sig.status == "tampered":
+            entries.append(ScoreEntry(30, "Authenticode digest mismatch — file modified after signing"))
+        elif sig.status == "revoked":
+            entries.append(ScoreEntry(15, "Authenticode signing certificate revoked"))
+        elif sig.present and entries:
+            entries.append(ScoreEntry(-8, f"Authenticode signature present but {sig.status}"))
 
     report.score_breakdown = entries
     report.score = max(0, sum(e.points for e in entries))
