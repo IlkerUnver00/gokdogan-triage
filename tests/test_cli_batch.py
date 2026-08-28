@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from peregrine.cli import main
+from gokdogan.cli import main
 
 SYS32 = Path(r"C:\Windows\System32")
 SOURCES = [SYS32 / "notepad.exe", SYS32 / "calc.exe"]

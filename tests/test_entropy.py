@@ -1,6 +1,6 @@
 import os
 
-from peregrine.entropy import entropy_label, shannon_entropy
+from gokdogan.entropy import entropy_label, shannon_entropy
 
 
 def test_empty_data_is_zero():

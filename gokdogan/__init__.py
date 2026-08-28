@@ -1,4 +1,4 @@
-"""peregrine — static PE malware triage engine.
+"""gokdogan — static PE malware triage engine.
 
 Takes a PE file, extracts static features (hashes, imphash, entropy,
 packer indicators, classified strings, import-based capabilities,

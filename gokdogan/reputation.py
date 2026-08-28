@@ -1,6 +1,6 @@
 """Optional reputation lookup — VirusTotal and MalwareBazaar.
 
-This is the *only* part of peregrine that touches the network, and it is
+This is the *only* part of gokdogan that touches the network, and it is
 strictly opt-in: nothing here runs unless the CLI is given ``--reputation``
 and an API key. Only the sample's **SHA-256 hash** is ever sent — never the
 file — so an analyst can check "is this already known?" without uploading a

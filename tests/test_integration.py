@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from peregrine.engine import NotAPEError, triage
-from peregrine.report import render_json
+from gokdogan.engine import NotAPEError, triage
+from gokdogan.report import render_json
 
 NOTEPAD = Path(r"C:\Windows\System32\notepad.exe")
 KERNEL32 = Path(r"C:\Windows\System32\kernel32.dll")
@@ -33,7 +33,7 @@ def test_triage_notepad_runs_clean():
     assert report.file.sha256
     assert report.file.imphash
     # ssdeep is a hard dep in the test env; a real binary must hash.
-    from peregrine import fuzzy
+    from gokdogan import fuzzy
     if fuzzy.HAVE_SSDEEP:
         assert report.file.ssdeep
     assert len(report.sections) > 2

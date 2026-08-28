@@ -1,7 +1,7 @@
 """MITRE ATT&CK mapping.
 
 A small, curated slice of the ATT&CK Enterprise matrix — only the
-techniques peregrine's capabilities and YARA rules can actually imply
+techniques gokdogan's capabilities and YARA rules can actually imply
 from static features. Kept deliberately hand-maintained rather than
 pulling the full STIX bundle: triage wants a handful of high-confidence
 techniques an analyst recognizes, not the entire matrix.
@@ -224,11 +224,11 @@ def to_navigator_layer(report, name: str | None = None) -> dict:
         )
 
     return {
-        "name": f"peregrine — {sample}",
+        "name": f"gokdogan — {sample}",
         "versions": {"attack": "14", "navigator": "4.9.1", "layer": "4.5"},
         "domain": "enterprise-attack",
         "description": (
-            f"peregrine static triage of {report.file.path} "
+            f"gokdogan static triage of {report.file.path} "
             f"(verdict {report.verdict.value}, score {report.score}, "
             f"sha256 {report.file.sha256})"
         ),

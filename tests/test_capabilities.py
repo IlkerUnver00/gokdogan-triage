@@ -1,5 +1,5 @@
-from peregrine.capabilities import infer_capabilities
-from peregrine.models import StringHit
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.models import StringHit
 
 
 def _names(caps):

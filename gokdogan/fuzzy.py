@@ -2,7 +2,7 @@
 
 Cryptographic hashes change completely on a one-byte edit; fuzzy hashes
 change *proportionally*, so two builds of the same malware from the same
-kit score as similar. peregrine emits two complementary schemes:
+kit score as similar. gokdogan emits two complementary schemes:
 
   * ssdeep — context-triggered piecewise hashing; compare score 0..100
     (100 = identical). Provided by the pure-Python ``ppdeep`` package, so

@@ -1,6 +1,6 @@
 import json
 
-from peregrine.attack import (
+from gokdogan.attack import (
     CAPABILITY_ATTACK,
     TACTIC_ORDER,
     TECHNIQUES,
@@ -10,8 +10,8 @@ from peregrine.attack import (
     techniques_for,
     to_navigator_layer,
 )
-from peregrine.capabilities import infer_capabilities
-from peregrine.models import (
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.models import (
     AttackTechnique,
     Capability,
     FileInfo,

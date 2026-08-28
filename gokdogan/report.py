@@ -73,7 +73,7 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         stream.write(c(_BOLD + _CYAN, f"\n── {title} " + "─" * max(0, 58 - len(title))) + "\n")
 
     f = report.file
-    stream.write(c(_BOLD, f"\npEregrine triage report — {f.path}\n"))
+    stream.write(c(_BOLD, f"\ngokdogan triage report — {f.path}\n"))
 
     header("File")
     stream.write(f"  type       : {f.file_type}\n")

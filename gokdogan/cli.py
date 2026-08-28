@@ -1,10 +1,10 @@
 """Command-line interface.
 
-    peregrine sample.exe
-    peregrine C:\\samples --json out\\
-    peregrine sample.exe --json report.json --rules my_rules\\
-    peregrine C:\\dropzone --csv triage.csv          # batch summary
-    peregrine C:\\dropzone --jsonl triage.jsonl      # stream into a SIEM
+    gokdogan sample.exe
+    gokdogan C:\\samples --json out\\
+    gokdogan sample.exe --json report.json --rules my_rules\\
+    gokdogan C:\\dropzone --csv triage.csv          # batch summary
+    gokdogan C:\\dropzone --jsonl triage.jsonl      # stream into a SIEM
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .summary import summary_row, write_csv, write_jsonl
 
 PE_EXTENSIONS = {".exe", ".dll", ".sys", ".scr", ".cpl", ".ocx", ".drv", ".efi", ".bin"}
 
-# Exit codes let peregrine slot into pipelines:
+# Exit codes let gokdogan slot into pipelines:
 #   0 = all clean, 1 = usage/parse error, 2 = suspicious, 3 = high risk
 _EXIT = {Verdict.LIKELY_CLEAN: 0, Verdict.SUSPICIOUS: 2, Verdict.HIGH_RISK: 3}
 
@@ -74,7 +74,7 @@ def _collect_targets(path: Path) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="peregrine",
+        prog="gokdogan",
         description="Static PE malware triage: hashes, entropy, packer, strings, capabilities, YARA, verdict.",
     )
     parser.add_argument("target", help="PE file or directory of PE files")
@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-strlen", type=int, default=6, metavar="N",
                         help="minimum string length to extract (default 6)")
     parser.add_argument("--quiet", action="store_true", help="one summary line per file instead of a full report")
-    parser.add_argument("--version", action="version", version=f"peregrine {__version__}")
+    parser.add_argument("--version", action="version", version=f"gokdogan {__version__}")
     args = parser.parse_args(argv)
 
     targets = _collect_targets(Path(args.target))

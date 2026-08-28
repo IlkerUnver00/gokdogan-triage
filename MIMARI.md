@@ -1,4 +1,8 @@
-# peregrine — Mimari Özeti
+# gokdogan — Mimari Özeti
+
+> **gökdoğan**, avcı şahin (peregrine falcon) demektir — gökyüzünün en hızlı
+> avcısı. İsim yerinde: triyaj hızla, hangi örneğin tam analiz hak ettiğine
+> saniyeler içinde karar vermektir. (Paket ve komut ASCII `gokdogan`.)
 
 **Statik PE malware triyaj motoru.** Bir Windows çalıştırılabilirini alır,
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
@@ -20,9 +24,9 @@ etrafında düzenlendi.
 
 | İlke | Kodda karşılığı |
 |---|---|
-| **Saf fonksiyonlar → dataclass'lar** | Her analizci, `bytes`/`pefile.PE` üzerinde çalışıp dataclass döndüren saf bir fonksiyondur ([`models.py`](peregrine/models.py)). Analizciler birbirini ya da çıktı formatını tanımaz. Yeni aşama eklemek = bir modül + [`engine.py`](peregrine/engine.py)'de bir satır. |
+| **Saf fonksiyonlar → dataclass'lar** | Her analizci, `bytes`/`pefile.PE` üzerinde çalışıp dataclass döndüren saf bir fonksiyondur ([`models.py`](gokdogan/models.py)). Analizciler birbirini ya da çıktı formatını tanımaz. Yeni aşama eklemek = bir modül + [`engine.py`](gokdogan/engine.py)'de bir satır. |
 | **Varsayılan çevrimdışı** | `triage()` çekirdeği asla ağa dokunmaz, örneği asla çalıştırmaz. Tek çevrimiçi özellik (reputation) opt-in, yalnızca-hash ve CLI katmanındadır — böylece analiz çekirdeği air-gapped bir malware iş istasyonunda güvenlidir. |
-| **Denetlenebilir verdikt** | Skorun kendisi rapordur: her puan okunur bir gerekçe taşır ([`verdict.py`](peregrine/verdict.py)). Analistin itiraz edemeyeceği gizli bir model yoktur. |
+| **Denetlenebilir verdikt** | Skorun kendisi rapordur: her puan okunur bir gerekçe taşır ([`verdict.py`](gokdogan/verdict.py)). Analistin itiraz edemeyeceği gizli bir model yoktur. |
 | **Yanlış-pozitife karşı kalibre** | Eşikler, tahminle değil, stok imzalı Windows binary'lerine karşı ampirik olarak ayarlandı. Capability kuralları minimum sayıda farklı API isabeti ister; entropi adaları yalnızca yazılabilir bölümlerde tetiklenir; sıkıştırılmış ikon kaynakları beyaz listededir. |
 | **Zarif düşüş** | Eksik YARA, eksik kural, bozuk kaynak ağacı, çözümlenemeyen import tablosu — her biri çökme değil, raporda bir nota dönüşür. |
 
@@ -61,37 +65,37 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 ## 3. Modül haritası (21 modül, katmana göre)
 
 **Çekirdek**
-- [`engine.py`](peregrine/engine.py) — orkestratör; tüm `triage()` boru hattı
-- [`models.py`](peregrine/models.py) — her aşamanın paylaştığı dataclass'lar
-- [`loader.py`](peregrine/loader.py) — PE parse, hashler, imphash, yapısal anomaliler, (delay-)import
+- [`engine.py`](gokdogan/engine.py) — orkestratör; tüm `triage()` boru hattı
+- [`models.py`](gokdogan/models.py) — her aşamanın paylaştığı dataclass'lar
+- [`loader.py`](gokdogan/loader.py) — PE parse, hashler, imphash, yapısal anomaliler, (delay-)import
 
 **Kimlik & kümeleme**
-- [`fuzzy.py`](peregrine/fuzzy.py) — ssdeep + opsiyonel TLSH; `--compare` benzerlik
-- [`rich.py`](peregrine/rich.py) — Rich header hash, `@comp.id` çözümleme, checksum-kurcalama tespiti
+- [`fuzzy.py`](gokdogan/fuzzy.py) — ssdeep + opsiyonel TLSH; `--compare` benzerlik
+- [`rich.py`](gokdogan/rich.py) — Rich header hash, `@comp.id` çözümleme, checksum-kurcalama tespiti
 
 **Yapı**
-- [`entropy.py`](peregrine/entropy.py) — Shannon entropi + eşikler
-- [`packers.py`](peregrine/packers.py) — bilinen packer bölümleri + yapısal sezgiseller
-- [`blobs.py`](peregrine/blobs.py) — şifreli-config entropi adaları
-- [`resources.py`](peregrine/resources.py) — `.rsrc` gezici: gömülü PE, yüksek-entropi blob
+- [`entropy.py`](gokdogan/entropy.py) — Shannon entropi + eşikler
+- [`packers.py`](gokdogan/packers.py) — bilinen packer bölümleri + yapısal sezgiseller
+- [`blobs.py`](gokdogan/blobs.py) — şifreli-config entropi adaları
+- [`resources.py`](gokdogan/resources.py) — `.rsrc` gezici: gömülü PE, yüksek-entropi blob
 
 **İçerik**
-- [`strings_ext.py`](peregrine/strings_ext.py) — ASCII/UTF-16LE çıkarma + IOC sınıflandırma
-- [`decoded.py`](peregrine/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string kurtarma
+- [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE çıkarma + IOC sınıflandırma
+- [`decoded.py`](gokdogan/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string kurtarma
 
 **Davranış & istihbarat**
-- [`exports.py`](peregrine/exports.py) — export tablosu + fırlatma mekanizması tespiti
-- [`capabilities.py`](peregrine/capabilities.py) — API/kanıt → davranış etiketi (capa tarzı)
-- [`attack.py`](peregrine/attack.py) — capability/YARA → MITRE ATT&CK + Navigator layer
-- [`yara_scan.py`](peregrine/yara_scan.py) — opsiyonel yara-python entegrasyonu
-- [`reputation.py`](peregrine/reputation.py) — opt-in VirusTotal / MalwareBazaar hash lookup
+- [`exports.py`](gokdogan/exports.py) — export tablosu + fırlatma mekanizması tespiti
+- [`capabilities.py`](gokdogan/capabilities.py) — API/kanıt → davranış etiketi (capa tarzı)
+- [`attack.py`](gokdogan/attack.py) — capability/YARA → MITRE ATT&CK + Navigator layer
+- [`yara_scan.py`](gokdogan/yara_scan.py) — opsiyonel yara-python entegrasyonu
+- [`reputation.py`](gokdogan/reputation.py) — opt-in VirusTotal / MalwareBazaar hash lookup
 
 **Verdikt & raporlama**
-- [`verdict.py`](peregrine/verdict.py) — şeffaf ağırlıklı skorlama
-- [`report.py`](peregrine/report.py) — ANSI konsol + JSON
-- [`html_report.py`](peregrine/html_report.py) — tek dosya, escape'li, tema-duyarlı HTML
-- [`summary.py`](peregrine/summary.py) — batch CSV/JSONL için sample başına düz satır
-- [`cli.py`](peregrine/cli.py) — argparse CLI, çıkış kodları, çıktı yönlendirme
+- [`verdict.py`](gokdogan/verdict.py) — şeffaf ağırlıklı skorlama
+- [`report.py`](gokdogan/report.py) — ANSI konsol + JSON
+- [`html_report.py`](gokdogan/html_report.py) — tek dosya, escape'li, tema-duyarlı HTML
+- [`summary.py`](gokdogan/summary.py) — batch CSV/JSONL için sample başına düz satır
+- [`cli.py`](gokdogan/cli.py) — argparse CLI, çıkış kodları, çıktı yönlendirme
 
 ---
 
@@ -118,13 +122,13 @@ etmek ~2,4 sn sürüyordu. İçgörü: herhangi bir tek-bayt XOR/ADD altında
 `encoded[i] ⊕ encoded[i-1]` **anahtardan bağımsızdır**. Tamponu bir kez
 dönüştürmek (XOR için bigint kaydırma, C hızında) anahtar tespitini anchor
 başına tek bir substring aramasına indirger — **2.440 ms → 133 ms**, tam
-kapsam korunarak. ([`decoded.py`](peregrine/decoded.py))
+kapsam korunarak. ([`decoded.py`](gokdogan/decoded.py))
 
 **Entropi varsayılmadı, ölçüldü.** 256 baytlık pencere rastgeleliği ölçmek
 için çok küçüktür: gerçek rastgele veri orada ortalama yalnızca ~7,17 bit
 verir (küçük-örneklem yanlılığı), eşik sessizce ulaşılamaz hale gelir.
 Dağılımı ölçmek 512 baytlık pencereye (rastgele ≈ 7,5+) ve 7,4 eşiğine
-götürdü. ([`blobs.py`](peregrine/blobs.py))
+götürdü. ([`blobs.py`](gokdogan/blobs.py))
 
 **Yanlış-pozitifler el sallamayla değil kalibrasyonla giderildi.** Config-blob
 tespiti 150 stok imzalı sistem binary'sinde tarandı; salt-okunur `.rdata`
@@ -136,13 +140,13 @@ tetiklenmeden önce minimum farklı API isabeti ister.
 **Aracın kendisinin güvenliği.** Malware string'leri markup içerebilir; HTML
 raporu her sample-türevli değeri `html.escape`'ten geçirir, böylece bir rapor
 açıldığında gömülü bir `<script>` asla çalışmaz — testle doğrulandı.
-([`html_report.py`](peregrine/html_report.py))
+([`html_report.py`](gokdogan/html_report.py))
 
 **Çevrimdışı çekirdek, opt-in egress.** Reputation tek ağ özelliğidir.
 Varsayılan kapalıdır, yalnızca SHA-256 gönderir (asla dosya), anahtarsız
 çalışmayı reddeder (böylece kazara hash sızdırmaz) ve CLI katmanında eklenir —
 `triage()` motoru kanıtlanabilir şekilde çevrimdışı kalır.
-([`reputation.py`](peregrine/reputation.py))
+([`reputation.py`](gokdogan/reputation.py))
 
 ---
 
@@ -189,6 +193,6 @@ yeten bir CLI.
 
 ---
 
-*peregrine yalnızca statik triyaj yapar. Örneği asla çalıştırmaz ve verdikti
+*gokdogan yalnızca statik triyaj yapar. Örneği asla çalıştırmaz ve verdikti
 kesin bir sınıflandırma değil, bir önceliklendirme sinyalidir. Gerçek
 malware'i izole bir analiz VM'inde ele alın.*

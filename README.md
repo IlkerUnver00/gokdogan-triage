@@ -1,6 +1,6 @@
-# peregrine 🦅
+# gokdogan 🦅
 
-[![tests](https://github.com/IlkerUnver00/peregrine-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/peregrine-triage/actions/workflows/ci.yml)
+[![tests](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](#license)
 
@@ -9,24 +9,25 @@ static features — hashes, imphash, per-section entropy, packer artifacts,
 classified strings, import-based capability tags, YARA matches — and produces a
 transparent, weighted triage verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-Named after the peregrine falcon — the fastest hunter in the sky — because
-triage is about speed: deciding in seconds which samples deserve a full
-analyst's attention.
+**gökdoğan** is Turkish for the *peregrine falcon* — the fastest hunter in the
+sky. A fitting name: triage is about speed, deciding in seconds which samples
+deserve a full analyst's attention. (The package and command are the ASCII
+`gokdogan`.)
 
-> ⚠️ **Triage, not conviction.** peregrine never executes the sample and its
+> ⚠️ **Triage, not conviction.** gokdogan never executes the sample and its
 > verdict is a prioritization signal, not a definitive classification. Handle
 > real malware only inside an isolated analysis VM.
 
 > 📐 **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) (English) ·
 > [MIMARI.md](MIMARI.md) (Türkçe) ·
-> **[live visual page ↗](https://ilkerunver00.github.io/peregrine-triage/)**
+> **[live visual page ↗](https://ilkerunver00.github.io/gokdogan-triage/)**
 > ([source](docs/index.html))
 
 ## What it does
 
 ```text
             ┌────────────────────────────────────────────────┐
-            │                  peregrine                     │
+            │                  gokdogan                     │
  sample.exe │  ┌──────────┐  ┌─────────┐  ┌──────────────┐   │
  ──────────▶│  │ loader   │─▶│ packers │  │ strings_ext  │   │
             │  │ pefile   │  │ entropy │  │ classifier   │   │
@@ -82,34 +83,34 @@ pip install -e .[dev,tlsh]   # include TLSH (needs a C++ compiler)
 
 ```bash
 # full report for one sample
-peregrine sample.exe
+gokdogan sample.exe
 
 # scan a directory, one summary line per file
-peregrine C:\samples --quiet
+gokdogan C:\samples --quiet
 
 # JSON for pipelines (SOAR, sandbox pre-filter, …)
-peregrine sample.exe --json report.json
+gokdogan sample.exe --json report.json
 
 # self-contained HTML report to attach to a case (verdict rationale embedded)
-peregrine sample.exe --html report.html
+gokdogan sample.exe --html report.html
 
 # MITRE ATT&CK Navigator layer — load it at
 # https://mitre-attack.github.io/attack-navigator/ to see the sample's
 # techniques highlighted on the matrix, shaded by triage confidence
-peregrine sample.exe --attack-layer sample.attack.json
+gokdogan sample.exe --attack-layer sample.attack.json
 
 # fuzzy-compare a sample against a known reference (clustering)
-peregrine suspect.exe --compare known_stealer.exe
+gokdogan suspect.exe --compare known_stealer.exe
 
 # batch-triage a whole dropzone into one sortable table
-peregrine C:\dropzone --csv triage.csv
-peregrine C:\dropzone --jsonl triage.jsonl     # one JSON object per line, SIEM-ready
+gokdogan C:\dropzone --csv triage.csv
+gokdogan C:\dropzone --jsonl triage.jsonl     # one JSON object per line, SIEM-ready
 
 # your own rule set
-peregrine sample.exe --rules C:\rules\team-rules
+gokdogan sample.exe --rules C:\rules\team-rules
 
 # opt-in reputation: sends ONLY the SHA-256 (never the file) to VT/MalwareBazaar
-peregrine sample.exe --reputation --vt-key $VT_API_KEY
+gokdogan sample.exe --reputation --vt-key $VT_API_KEY
 ```
 
 Reputation lookup is the **only** feature that touches the network, and it
@@ -118,7 +119,7 @@ or `VT_API_KEY`/`MB_API_KEY`). It sends the sample's SHA-256 only — never the
 file — and prints a heads-up before any hash leaves the host. The core
 `triage()` engine is always fully offline.
 
-In batch mode peregrine prints one line per sample plus a final tally
+In batch mode gokdogan prints one line per sample plus a final tally
 (`N file(s): X high-risk, Y suspicious, Z clean`) and writes a flat
 summary row per file — verdict, score, imphash/rich_hash/ssdeep (for
 clustering), capabilities, ATT&CK techniques, YARA hits, and counts of
@@ -127,12 +128,12 @@ score to work a dropzone worst-first, or group by imphash/rich_hash to
 cluster variants.
 
 Exit codes are pipeline-friendly: `0` clean, `2` suspicious, `3` high risk —
-so `peregrine dropzone/ --quiet && echo OK` works as a gate.
+so `gokdogan dropzone/ --quiet && echo OK` works as a gate.
 
 ### Sample output
 
 ```text
-pEregrine triage report — invoice_scan.exe
+gokdogan triage report — invoice_scan.exe
 
 ── File ──────────────────────────────────────────────────
   type       : PE32 executable (GUI) x86
@@ -176,8 +177,8 @@ pEregrine triage report — invoice_scan.exe
 ## Project layout
 
 ```text
-peregrine/
-├── peregrine/
+gokdogan/
+├── gokdogan/
 │   ├── engine.py         # orchestrator: triage() pipeline
 │   ├── loader.py         # PE parsing, hashes, imphash, anomalies
 │   ├── rich.py          # Rich header hash, @comp.id decode, checksum check

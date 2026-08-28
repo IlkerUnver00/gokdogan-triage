@@ -4,9 +4,9 @@ import pytest
 
 import pefile
 
-from peregrine.capabilities import infer_capabilities
-from peregrine.models import ResourceInfo
-from peregrine.resources import (
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.models import ResourceInfo
+from gokdogan.resources import (
     _classify_resource,
     _looks_like_pe,
     resource_anomalies,

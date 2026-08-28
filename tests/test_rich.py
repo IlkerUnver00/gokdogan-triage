@@ -4,8 +4,8 @@ import pytest
 
 import pefile
 
-from peregrine import rich
-from peregrine.rich import _prodid_name, _rotl32, parse_rich_header
+from gokdogan import rich
+from gokdogan.rich import _prodid_name, _rotl32, parse_rich_header
 
 NOTEPAD = Path(r"C:\Windows\System32\notepad.exe")
 has_notepad = pytest.mark.skipif(not NOTEPAD.exists(), reason="notepad.exe not available")

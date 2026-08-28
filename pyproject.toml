@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "peregrine-triage"
+name = "gokdogan-triage"
 version = "0.1.0"
 description = "Static PE malware triage engine: imphash, entropy, packer detection, string classification, capability tagging, YARA, weighted verdict."
 readme = "README.md"
@@ -26,10 +26,10 @@ tlsh = ["py-tlsh>=4.7"]
 dev = ["pytest>=7.4", "yara-python>=4.3"]
 
 [project.scripts]
-peregrine = "peregrine.cli:main"
+gokdogan = "gokdogan.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["peregrine*"]
+include = ["gokdogan*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

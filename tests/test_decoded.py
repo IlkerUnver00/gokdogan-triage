@@ -1,7 +1,7 @@
 import base64
 
-from peregrine.capabilities import infer_capabilities
-from peregrine.decoded import _rol8, recover_encoded_strings
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.decoded import _rol8, recover_encoded_strings
 
 
 def _xor(data: bytes, key: int) -> bytes:

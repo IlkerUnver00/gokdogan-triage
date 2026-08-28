@@ -1,6 +1,9 @@
-# peregrine — Architecture Overview
+# gokdogan — Architecture Overview
 
-**Static PE malware triage engine.** Given a Windows executable, peregrine
+*gökdoğan* is Turkish for the **peregrine falcon** — the fastest hunter in the
+sky. The package and command are the ASCII `gokdogan`.
+
+**Static PE malware triage engine.** Given a Windows executable, gokdogan
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
@@ -19,9 +22,9 @@ fast, and trustworthy for an analyst.
 
 | Principle | What it means in the code |
 |---|---|
-| **Pure functions → dataclasses** | Every analyzer is a pure function over `bytes`/`pefile.PE` returning dataclasses ([`models.py`](peregrine/models.py)). Analyzers never know about each other or the output format. Adding a stage = one module + one line in [`engine.py`](peregrine/engine.py). |
+| **Pure functions → dataclasses** | Every analyzer is a pure function over `bytes`/`pefile.PE` returning dataclasses ([`models.py`](gokdogan/models.py)). Analyzers never know about each other or the output format. Adding a stage = one module + one line in [`engine.py`](gokdogan/engine.py). |
 | **Offline by default** | The `triage()` core never touches the network and never runs the sample. The single online feature (reputation) is opt-in, hash-only, and lives in the CLI layer — so the analysis core is safe on an air-gapped malware workstation. |
-| **Auditable verdict** | The score *is* the report: every point carries a human-readable reason ([`verdict.py`](peregrine/verdict.py)). There is no hidden model an analyst can't argue with. |
+| **Auditable verdict** | The score *is* the report: every point carries a human-readable reason ([`verdict.py`](gokdogan/verdict.py)). There is no hidden model an analyst can't argue with. |
 | **Calibrated against false positives** | Thresholds were tuned empirically against stock signed Windows binaries, not guessed. Capability rules require a minimum number of distinct API hits; entropy islands only fire in writable sections; compressed icon resources are whitelisted. |
 | **Graceful degradation** | Missing YARA, missing rules, a corrupt resource tree, an unparseable import table — each becomes a note in the report, never a crash. |
 
@@ -61,37 +64,37 @@ fully decoupled.
 ## 3. Module map (21 modules, by layer)
 
 **Core**
-- [`engine.py`](peregrine/engine.py) — orchestrator; the entire `triage()` pipeline
-- [`models.py`](peregrine/models.py) — dataclasses shared by every stage
-- [`loader.py`](peregrine/loader.py) — PE parsing, hashes, imphash, structural anomalies, (delay-)imports
+- [`engine.py`](gokdogan/engine.py) — orchestrator; the entire `triage()` pipeline
+- [`models.py`](gokdogan/models.py) — dataclasses shared by every stage
+- [`loader.py`](gokdogan/loader.py) — PE parsing, hashes, imphash, structural anomalies, (delay-)imports
 
 **Identity & clustering**
-- [`fuzzy.py`](peregrine/fuzzy.py) — ssdeep + optional TLSH; `--compare` similarity
-- [`rich.py`](peregrine/rich.py) — Rich header hash, `@comp.id` decode, checksum-tamper detection
+- [`fuzzy.py`](gokdogan/fuzzy.py) — ssdeep + optional TLSH; `--compare` similarity
+- [`rich.py`](gokdogan/rich.py) — Rich header hash, `@comp.id` decode, checksum-tamper detection
 
 **Structure**
-- [`entropy.py`](peregrine/entropy.py) — Shannon entropy + thresholds
-- [`packers.py`](peregrine/packers.py) — known packer sections + structural heuristics
-- [`blobs.py`](peregrine/blobs.py) — encrypted-config entropy islands
-- [`resources.py`](peregrine/resources.py) — `.rsrc` walker: embedded PEs, high-entropy blobs
+- [`entropy.py`](gokdogan/entropy.py) — Shannon entropy + thresholds
+- [`packers.py`](gokdogan/packers.py) — known packer sections + structural heuristics
+- [`blobs.py`](gokdogan/blobs.py) — encrypted-config entropy islands
+- [`resources.py`](gokdogan/resources.py) — `.rsrc` walker: embedded PEs, high-entropy blobs
 
 **Content**
-- [`strings_ext.py`](peregrine/strings_ext.py) — ASCII/UTF-16LE extraction + IOC classification
-- [`decoded.py`](peregrine/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string recovery
+- [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE extraction + IOC classification
+- [`decoded.py`](gokdogan/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string recovery
 
 **Behavior & intelligence**
-- [`exports.py`](peregrine/exports.py) — export table + launch-mechanism detection
-- [`capabilities.py`](peregrine/capabilities.py) — API/evidence → behavior tags (capa-style)
-- [`attack.py`](peregrine/attack.py) — capabilities/YARA → MITRE ATT&CK + Navigator layer
-- [`yara_scan.py`](peregrine/yara_scan.py) — optional yara-python integration
-- [`reputation.py`](peregrine/reputation.py) — opt-in VirusTotal / MalwareBazaar hash lookup
+- [`exports.py`](gokdogan/exports.py) — export table + launch-mechanism detection
+- [`capabilities.py`](gokdogan/capabilities.py) — API/evidence → behavior tags (capa-style)
+- [`attack.py`](gokdogan/attack.py) — capabilities/YARA → MITRE ATT&CK + Navigator layer
+- [`yara_scan.py`](gokdogan/yara_scan.py) — optional yara-python integration
+- [`reputation.py`](gokdogan/reputation.py) — opt-in VirusTotal / MalwareBazaar hash lookup
 
 **Verdict & reporting**
-- [`verdict.py`](peregrine/verdict.py) — transparent weighted scoring
-- [`report.py`](peregrine/report.py) — ANSI console + JSON
-- [`html_report.py`](peregrine/html_report.py) — self-contained, escaped, theme-aware HTML
-- [`summary.py`](peregrine/summary.py) — flat per-sample rows for batch CSV/JSONL
-- [`cli.py`](peregrine/cli.py) — argparse CLI, exit codes, output routing
+- [`verdict.py`](gokdogan/verdict.py) — transparent weighted scoring
+- [`report.py`](gokdogan/report.py) — ANSI console + JSON
+- [`html_report.py`](gokdogan/html_report.py) — self-contained, escaped, theme-aware HTML
+- [`summary.py`](gokdogan/summary.py) — flat per-sample rows for batch CSV/JSONL
+- [`cli.py`](gokdogan/cli.py) — argparse CLI, exit codes, output routing
 
 ---
 
@@ -118,12 +121,12 @@ The insight: under any single-byte XOR/ADD, `encoded[i] ⊕ encoded[i-1]` is
 *independent of the key*. Transforming the buffer once (XOR via a big-integer
 shift, at C speed) turns key detection into a single substring search per
 anchor — **2,440 ms → 133 ms**, with full coverage retained.
-([`decoded.py`](peregrine/decoded.py))
+([`decoded.py`](gokdogan/decoded.py))
 
 **Entropy measured, not assumed.** A 256-byte window is too small to measure
 randomness: truly-random data averages only ~7.17 bits there (small-sample
 bias), so the threshold was silently unreachable. Measuring the distribution
-led to a 512-byte window (random ≈ 7.5+) and a 7.4 cut. ([`blobs.py`](peregrine/blobs.py))
+led to a 512-byte window (random ≈ 7.5+) and a 7.4 cut. ([`blobs.py`](gokdogan/blobs.py))
 
 **False positives eliminated by calibration, not hand-waving.** Config-blob
 detection was swept across 150 stock signed system binaries; read-only
@@ -135,13 +138,13 @@ distinct API hits before a capability fires.
 **Security of the tool itself.** Malware strings can contain markup; the HTML
 report passes every sample-derived value through `html.escape`, so opening a
 report can never execute an embedded `<script>` — verified by test.
-([`html_report.py`](peregrine/html_report.py))
+([`html_report.py`](gokdogan/html_report.py))
 
 **Offline core, opt-in egress.** Reputation is the only networked feature. It
 is off by default, sends the SHA-256 only (never the file), refuses to run
 without a key (and thus never leaks a hash by accident), and is attached in
 the CLI layer so the `triage()` engine stays provably offline.
-([`reputation.py`](peregrine/reputation.py))
+([`reputation.py`](gokdogan/reputation.py))
 
 ---
 
@@ -188,6 +191,6 @@ drops into a malware-lab workflow.
 
 ---
 
-*peregrine performs static triage only. It never executes the sample, and its
+*gokdogan performs static triage only. It never executes the sample, and its
 verdict is a prioritization signal, not a definitive classification. Handle
 real malware inside an isolated analysis VM.*

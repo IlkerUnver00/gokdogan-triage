@@ -1,4 +1,4 @@
-from peregrine.strings_ext import analyze_strings, classify, extract_strings
+from gokdogan.strings_ext import analyze_strings, classify, extract_strings
 
 
 def test_extract_ascii_and_wide():

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from peregrine.html_report import render_html
-from peregrine.models import (
+from gokdogan.html_report import render_html
+from gokdogan.models import (
     Capability,
     DecodedString,
     FileInfo,
@@ -65,7 +65,7 @@ NOTEPAD = Path(r"C:\Windows\System32\notepad.exe")
 
 @pytest.mark.skipif(not NOTEPAD.exists(), reason="notepad.exe not available")
 def test_html_renders_real_report():
-    from peregrine.engine import triage
+    from gokdogan.engine import triage
 
     html = render_html(triage(NOTEPAD, use_yara=False))
     assert "notepad.exe" in html

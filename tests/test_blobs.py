@@ -5,9 +5,9 @@ import pytest
 
 import pefile
 
-from peregrine.blobs import _islands, find_config_blobs
-from peregrine.capabilities import infer_capabilities
-from peregrine.models import ConfigBlob
+from gokdogan.blobs import _islands, find_config_blobs
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.models import ConfigBlob
 
 NOTEPAD = Path(r"C:\Windows\System32\notepad.exe")
 has_notepad = pytest.mark.skipif(not NOTEPAD.exists(), reason="notepad.exe not available")

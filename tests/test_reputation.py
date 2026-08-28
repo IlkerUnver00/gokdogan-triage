@@ -1,8 +1,8 @@
 import io
 import urllib.error
 
-from peregrine import reputation
-from peregrine.reputation import (
+from gokdogan import reputation
+from gokdogan.reputation import (
     lookup_malwarebazaar,
     lookup_virustotal,
     parse_malwarebazaar,

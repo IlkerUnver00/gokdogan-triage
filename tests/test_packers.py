@@ -1,5 +1,5 @@
-from peregrine.models import SectionInfo
-from peregrine.packers import detect_packer
+from gokdogan.models import SectionInfo
+from gokdogan.packers import detect_packer
 
 
 def _section(name, entropy=6.0, is_exec=True, flags=None, raw_size=4096):

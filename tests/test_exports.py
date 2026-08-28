@@ -4,10 +4,10 @@ import pytest
 
 import pefile
 
-from peregrine.capabilities import infer_capabilities
-from peregrine.exports import parse_exports
-from peregrine.loader import delay_imported_functions, imported_functions
-from peregrine.models import ExportInfo
+from gokdogan.capabilities import infer_capabilities
+from gokdogan.exports import parse_exports
+from gokdogan.loader import delay_imported_functions, imported_functions
+from gokdogan.models import ExportInfo
 
 KERNEL32 = Path(r"C:\Windows\System32\kernel32.dll")
 MMC = Path(r"C:\Windows\System32\mmc.exe")

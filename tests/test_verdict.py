@@ -1,4 +1,4 @@
-from peregrine.models import (
+from gokdogan.models import (
     Capability,
     FileInfo,
     PackerInfo,
@@ -6,7 +6,7 @@ from peregrine.models import (
     Verdict,
     YaraHit,
 )
-from peregrine.verdict import score_report
+from gokdogan.verdict import score_report
 
 
 def _file_info(**overrides):

@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from peregrine import fuzzy
+from gokdogan import fuzzy
 
 ssdeep_only = pytest.mark.skipif(not fuzzy.HAVE_SSDEEP, reason="ppdeep not installed")
 tlsh_only = pytest.mark.skipif(not fuzzy.HAVE_TLSH, reason="tlsh not installed")

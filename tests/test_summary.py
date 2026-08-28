@@ -2,7 +2,7 @@ import csv
 import io
 import json
 
-from peregrine.models import (
+from gokdogan.models import (
     AttackTechnique,
     Capability,
     ConfigBlob,
@@ -14,7 +14,7 @@ from peregrine.models import (
     Verdict,
     YaraHit,
 )
-from peregrine.summary import FIELDS, csv_string, summary_row, write_csv, write_jsonl
+from gokdogan.summary import FIELDS, csv_string, summary_row, write_csv, write_jsonl
 
 
 def _report():
