@@ -20,6 +20,7 @@ from .cluster import cluster_reports
 from .engine import NotAPEError, triage
 from .fuzzy import compare_ssdeep, compare_tlsh, ssdeep_hash, tlsh_hash
 from .html_report import render_html
+from .misp import render_misp
 from .models import Verdict
 from .report import render_console, render_json, render_navigator_layer
 from .reputation import lookup as reputation_lookup
@@ -121,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--attack-layer", metavar="PATH",
                         help="write a MITRE ATT&CK Navigator layer (.json) to file "
                              "(or directory when scanning a directory)")
+    parser.add_argument("--misp", metavar="PATH",
+                        help="write a MISP-importable event (.json) to file "
+                             "(or directory when scanning a directory)")
     parser.add_argument("--compare", metavar="PATH",
                         help="reference file to fuzzy-compare each target against "
                              "(prints ssdeep similarity 0-100 and TLSH distance)")
@@ -158,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     json_dir, json_file = _resolve_output(args.json, len(targets))
     html_dir, html_file = _resolve_output(args.html, len(targets))
     layer_dir, layer_file = _resolve_output(args.attack_layer, len(targets))
+    misp_dir, misp_file = _resolve_output(args.misp, len(targets))
 
     if args.reputation:
         if not (args.vt_key or args.mb_key):
@@ -239,6 +244,12 @@ def main(argv: list[str] | None = None) -> int:
                 render_navigator_layer(report), encoding="utf-8")
         elif layer_file is not None:
             layer_file.write_text(render_navigator_layer(report), encoding="utf-8")
+
+        if misp_dir is not None:
+            (misp_dir / (target.name + ".misp.json")).write_text(
+                render_misp(report), encoding="utf-8")
+        elif misp_file is not None:
+            misp_file.write_text(render_misp(report), encoding="utf-8")
 
         if batch:
             rows.append(summary_row(report))
