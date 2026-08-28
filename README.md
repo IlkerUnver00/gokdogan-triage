@@ -47,8 +47,10 @@ deserve a full analyst's attention. (The package and command are the ASCII
 
 | Stage | Signal | Why it matters in triage |
 |---|---|---|
-| **Hashing** | MD5/SHA1/SHA256 + **imphash** | imphash clusters samples by import table — different payloads built from the same builder share it |
+| **Hashing** | MD5/SHA1/SHA256 + **imphash** + **impfuzzy** + **authentihash** | imphash/impfuzzy cluster by import table; authentihash matches re-signed / signed-vs-unsigned copies of the same binary |
 | **Fuzzy hashing** | **ssdeep** + optional **TLSH** | similarity-preserving: two builds of the same malware score as related even when every crypto hash differs; `--compare` scores a sample against a reference |
+| **Clustering** | `--cluster` groups a dropzone by shared hashes / fuzzy similarity; `--baseline` diffs a sample against a known-good reference | work a folder family-by-family, or answer "is this the real X or a trojanized X?" |
+| **Managed (.NET)** | CLR-header detection: runtime version, flags, obfuscator fingerprints | flags that a sample is .NET (import-based capabilities are blind to managed code) and spots ConfuserEx / .NET Reactor / SmartAssembly |
 | **Rich header** | toolchain **rich_hash** + decoded `@comp.id` entries + checksum validation | fingerprints the exact build environment (more specific than imphash); a bad checksum means a forged/copied header — an anti-clustering tell |
 | **Resource walker** | enumerates `.rsrc`, hashes each leaf, flags **embedded PEs** and **high-entropy blobs** | the dropper/packer's favourite hiding spot; compressed image resources are whitelisted so clean binaries stay quiet |
 | **Export table** | DLL name, named/ordinal counts, forwarders, launch-mechanism exports (`ReflectiveLoader`, `DllRegisterServer`, `ServiceMain`) | tells you how a DLL expects to be run — reflective beacon, `regsvr32` target, or service host |
@@ -64,7 +66,7 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **ATT&CK mapping** | capabilities + YARA rules → MITRE ATT&CK techniques, grouped by tactic in kill-chain order | speaks the language of detections, reports, and threat intel |
 | **YARA** | bundled + user-supplied rules; `meta.weight` feeds the score directly, `meta.attack` feeds the ATT&CK summary | drop your team's rules in and they participate in the verdict |
 | **Verdict** | transparent weighted score with a printed breakdown | every point has a reason — the analyst can argue with it |
-| **Reporting** | ANSI console, JSON, **self-contained HTML** (verdict rationale embedded), CSV/JSONL batch, ATT&CK Navigator layer | one engine, many outputs — terminal for triage, HTML for the case file, CSV for the dropzone, JSON for the pipeline |
+| **Reporting** | ANSI console, JSON, **self-contained HTML** (verdict rationale embedded), CSV/JSONL batch, ATT&CK Navigator layer, **MISP event** | one engine, many outputs — terminal for triage, HTML for the case file, CSV for the dropzone, JSON for the pipeline, MISP for threat-intel sharing |
 | **Reputation** (opt-in) | VirusTotal + MalwareBazaar **hash-only** lookup, off by default | "is this already known?" without uploading the sample — only the SHA-256 leaves, and only when you pass `--reputation` with a key |
 
 ## Install
@@ -107,6 +109,13 @@ gokdogan suspect.exe --compare known_stealer.exe
 # batch-triage a whole dropzone into one sortable table
 gokdogan C:\dropzone --csv triage.csv
 gokdogan C:\dropzone --jsonl triage.jsonl     # one JSON object per line, SIEM-ready
+
+# cluster a dropzone into families, or diff against a known-good binary
+gokdogan C:\dropzone --cluster
+gokdogan suspect_svchost.exe --baseline C:\Windows\System32\svchost.exe
+
+# share findings as a MISP event
+gokdogan sample.exe --misp sample.misp.json
 
 # your own rule set
 gokdogan sample.exe --rules C:\rules\team-rules
@@ -242,7 +251,7 @@ gokdogan/
   - [x] Rich header hash, `@comp.id` toolchain decode, and checksum-tamper detection
   - [x] resource walker: embedded PEs in `.rsrc`, high-entropy blobs, dropper tagging
   - [x] export table analysis + delay-load imports merged into capabilities
-  - [ ] `--baseline` mode: diff a sample against a known-good imphash/section set
+  - [x] `--baseline` mode: diff a sample against a known-good reference
 - [ ] **v0.3 — deeper strings**
   - [x] single-byte XOR/ADD/ROL encoded-string recovery (FLOSS-lite), key-invariant adjacency search
   - [x] Base64 + hex blob detection and decode (IOCs and embedded PEs)
@@ -252,6 +261,15 @@ gokdogan/
   - [x] batch mode with CSV/JSONL summary for a whole dropzone
   - [x] self-contained HTML report with embedded verdict rationale
   - [x] VirusTotal / MalwareBazaar hash lookup (opt-in, hash-only)
+- [ ] **v0.5 — depth & interoperability**
+  - [x] Authenticode signature verification (`WinVerifyTrust`) + certificate details
+  - [x] overlay content analysis (embedded archives / PEs)
+  - [x] managed (.NET) detection: CLR header, flags, obfuscator fingerprints
+  - [x] extra clustering hashes (authentihash, impfuzzy) + `--cluster` / `--baseline`
+  - [x] MISP event export (`--misp`) for threat-intel sharing
+  - [x] ruff lint + coverage in CI
+  - [ ] true stack-string recovery via lightweight emulation
+  - [ ] FastAPI upload-and-triage service; PyPI + Docker packaging
 
 ## Testing
 
