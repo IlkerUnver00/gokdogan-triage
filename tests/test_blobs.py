@@ -1,9 +1,8 @@
 import os
 from pathlib import Path
 
-import pytest
-
 import pefile
+import pytest
 
 from gokdogan.blobs import _islands, find_config_blobs
 from gokdogan.capabilities import infer_capabilities

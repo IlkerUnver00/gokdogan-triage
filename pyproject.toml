@@ -23,7 +23,7 @@ dependencies = ["pefile>=2023.2.7", "ppdeep>=20200505"]
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
 tlsh = ["py-tlsh>=4.7"]
-dev = ["pytest>=7.4", "yara-python>=4.3"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.6", "yara-python>=4.3"]
 
 [project.scripts]
 gokdogan = "gokdogan.cli:main"
@@ -33,3 +33,17 @@ include = ["gokdogan*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# F = pyflakes (real errors), E/W = pycodestyle, I = import sorting,
+# UP = pyupgrade, B = bugbear. Broad-except rules are intentionally off:
+# a malware parser defensively swallows exceptions on hostile input.
+select = ["F", "E", "W", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

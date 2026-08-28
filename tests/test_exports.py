@@ -1,12 +1,11 @@
 from pathlib import Path
 
-import pytest
-
 import pefile
+import pytest
 
 from gokdogan.capabilities import infer_capabilities
 from gokdogan.exports import parse_exports
-from gokdogan.loader import delay_imported_functions, imported_functions
+from gokdogan.loader import delay_imported_functions
 from gokdogan.models import ExportInfo
 
 KERNEL32 = Path(r"C:\Windows\System32\kernel32.dll")

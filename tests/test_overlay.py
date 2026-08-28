@@ -1,8 +1,7 @@
 from pathlib import Path
 
-import pytest
-
 import pefile
+import pytest
 
 from gokdogan.models import OverlayInfo
 from gokdogan.overlay import _type_guess, analyze_overlay, overlay_anomalies

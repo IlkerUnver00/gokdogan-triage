@@ -17,8 +17,8 @@ from pathlib import Path
 from . import __version__
 from .engine import NotAPEError, triage
 from .fuzzy import compare_ssdeep, compare_tlsh, ssdeep_hash, tlsh_hash
-from .models import Verdict
 from .html_report import render_html
+from .models import Verdict
 from .report import render_console, render_json, render_navigator_layer
 from .reputation import lookup as reputation_lookup
 from .summary import summary_row, write_csv, write_jsonl

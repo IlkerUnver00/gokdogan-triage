@@ -72,7 +72,7 @@ class RichEntry:
 class RichHeader:
     hash: str            # MD5 of the decoded Rich header (toolchain fingerprint)
     xor_key: str         # stored checksum / XOR key, hex
-    entries: list["RichEntry"] = field(default_factory=list)
+    entries: list[RichEntry] = field(default_factory=list)
     checksum_valid: bool | None = None  # None = could not verify
 
 
@@ -188,13 +188,13 @@ class ScoreEntry:
 @dataclass
 class TriageReport:
     file: FileInfo
-    signature: "SignatureInfo | None" = None
-    overlay: "OverlayInfo | None" = None
-    rich: "RichHeader | None" = None
+    signature: SignatureInfo | None = None
+    overlay: OverlayInfo | None = None
+    rich: RichHeader | None = None
     sections: list[SectionInfo] = field(default_factory=list)
     resources: list[ResourceInfo] = field(default_factory=list)
     config_blobs: list[ConfigBlob] = field(default_factory=list)
-    exports: "ExportInfo | None" = None
+    exports: ExportInfo | None = None
     delay_imports: list[str] = field(default_factory=list)  # delay-loaded DLL names
     overall_entropy: float = 0.0
     packer: PackerInfo = field(default_factory=lambda: PackerInfo(detected=False))
@@ -206,7 +206,7 @@ class TriageReport:
     attack: list[AttackTechnique] = field(default_factory=list)
     yara: list[YaraHit] = field(default_factory=list)
     yara_error: str | None = None
-    reputation: list["Reputation"] = field(default_factory=list)
+    reputation: list[Reputation] = field(default_factory=list)
     score: int = 0
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     verdict: Verdict = Verdict.LIKELY_CLEAN

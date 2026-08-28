@@ -43,7 +43,7 @@ def verify(path: str) -> SignatureInfo:
         return SignatureInfo(status="unavailable",
                              note="signature verification needs Windows (WinVerifyTrust)")
     try:
-        status, note, code = _win_verify_trust(path)
+        status, note = _win_verify_trust(path)
     except Exception as exc:  # pragma: no cover - defensive against odd ctypes state
         return SignatureInfo(status="unavailable", note=f"verification error: {exc}")
 
@@ -116,7 +116,7 @@ def _win_verify_trust(path: str):
     wintrust.WinVerifyTrust(None, ctypes.byref(guid), ctypes.byref(data))
 
     status, note = _TRUST_CODES.get(code, ("invalid", f"trust error 0x{code:08x}"))
-    return status, note, code
+    return status, note
 
 
 # --- ctypes: certificate signer / issuer names -------------------------

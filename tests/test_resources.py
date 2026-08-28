@@ -1,8 +1,7 @@
 from pathlib import Path
 
-import pytest
-
 import pefile
+import pytest
 
 from gokdogan.capabilities import infer_capabilities
 from gokdogan.models import ResourceInfo

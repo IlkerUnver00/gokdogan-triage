@@ -97,7 +97,7 @@ CAPABILITY_ATTACK: dict[str, list[str]] = {
     "ransomware": ["T1486"],
     "exfil": ["T1048"],
     "injection": ["T1055"],
-    "execution": ["T1106"],
+    # note: "execution" is already defined above (import-capability section)
 }
 
 _TID_RE = re.compile(r"T\d{4}(?:\.\d{3})?")
@@ -137,7 +137,7 @@ def _tactic_sort_key(tactic: str) -> int:
         return len(TACTIC_ORDER)
 
 
-def build_attack_summary(capabilities, yara_hits) -> "list":
+def build_attack_summary(capabilities, yara_hits) -> list:
     """Aggregate ATT&CK techniques from capabilities and YARA hits.
 
     Returns a list of AttackTechnique, deduplicated by id, each carrying

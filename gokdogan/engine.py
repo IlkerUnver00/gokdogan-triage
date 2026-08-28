@@ -19,10 +19,9 @@ from .loader import (
     imported_functions,
     load_pe,
 )
-from .models import TriageReport
-from .packers import detect_packer
-from .models import SignatureInfo
+from .models import SignatureInfo, TriageReport
 from .overlay import analyze_overlay, overlay_anomalies
+from .packers import detect_packer
 from .resources import resource_anomalies, walk_resources
 from .rich import parse_rich_header
 from .signature import verify as verify_signature_file

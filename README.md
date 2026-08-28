@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![ruff](https://img.shields.io/badge/lint-ruff-orange)](https://docs.astral.sh/ruff/)
 [![license](https://img.shields.io/badge/license-MIT-green)](#license)
 
 **Static PE malware triage engine.** Feed it a Windows executable; it extracts

@@ -143,7 +143,8 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         stream.write(f"  hash {report.rich.hash}  (checksum {status})\n")
         stream.write(f"  {'prod id':>8} {'build':>7} {'count':>7}  tool\n")
         for e in report.rich.entries:
-            stream.write(f"  {'0x%x' % e.prod_id:>8} {e.build:>7} {e.count:>7}  {e.tool}\n")
+            prodid = f"0x{e.prod_id:x}"
+            stream.write(f"  {prodid:>8} {e.build:>7} {e.count:>7}  {e.tool}\n")
 
     if report.resources:
         header("Resources")
@@ -174,7 +175,7 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         e = report.exports
         name = e.dll_name or "-"
         if e.name_mismatch:
-            name += c(_YELLOW, f"  (internal name != file name)")
+            name += c(_YELLOW, "  (internal name != file name)")
         stream.write(f"  name       : {name}\n")
         stream.write(f"  exports    : {e.total} ({e.named} named, {e.ordinal_only} ordinal-only)\n")
         if e.forwarders:
