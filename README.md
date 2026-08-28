@@ -93,6 +93,14 @@ docker run --rm -v "$PWD/samples:/samples:ro" gokdogan /samples/suspect.exe
 The bundled YARA rules ship inside the package, so `gokdogan` works out of
 the box; point `--rules` at your own directory to add your team's rules.
 
+Prefer a browser? Run the optional upload-and-triage web service (drop a PE,
+get the HTML report; `POST /api/triage` returns JSON):
+
+```bash
+pip install -e ".[web]"
+uvicorn gokdogan.web:app --host 127.0.0.1 --port 8000
+```
+
 ## Usage
 
 ```bash
@@ -221,6 +229,7 @@ gokdogan/
 │   ├── reputation.py     # opt-in VirusTotal / MalwareBazaar hash lookup
 │   ├── summary.py        # flat per-sample rows for batch CSV/JSONL
 │   ├── cli.py            # argparse CLI, exit codes
+│   ├── web.py            # optional FastAPI upload-and-triage service
 │   └── rules/            # bundled starter YARA rules (packaged with the wheel)
 └── tests/                # pytest: unit per module + e2e on notepad.exe
 ```

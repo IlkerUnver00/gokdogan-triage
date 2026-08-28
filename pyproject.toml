@@ -23,7 +23,9 @@ dependencies = ["pefile>=2023.2.7", "ppdeep>=20200505"]
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
 tlsh = ["py-tlsh>=4.7"]
-dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.6", "yara-python>=4.3"]
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.6", "yara-python>=4.3",
+       "fastapi>=0.110", "httpx>=0.27", "python-multipart>=0.0.9"]
 
 [project.scripts]
 gokdogan = "gokdogan.cli:main"
