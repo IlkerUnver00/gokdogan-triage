@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
     yara = None
     YARA_AVAILABLE = False
 
-DEFAULT_RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
+DEFAULT_RULES_DIR = Path(__file__).resolve().parent / "rules"
 
 
 def scan(data: bytes, rules_dir: str | Path | None = None) -> tuple[list[YaraHit], str | None]:

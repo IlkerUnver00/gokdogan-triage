@@ -83,6 +83,16 @@ TLSH fuzzy hashing — each degrades to a note in the report when absent.
 pip install -e .[dev,tlsh]   # include TLSH (needs a C++ compiler)
 ```
 
+Or run it in a container (no host Python needed):
+
+```bash
+docker build -t gokdogan .
+docker run --rm -v "$PWD/samples:/samples:ro" gokdogan /samples/suspect.exe
+```
+
+The bundled YARA rules ship inside the package, so `gokdogan` works out of
+the box; point `--rules` at your own directory to add your team's rules.
+
 ## Usage
 
 ```bash
@@ -210,8 +220,8 @@ gokdogan/
 │   ├── html_report.py    # self-contained HTML report (escaped, theme-aware)
 │   ├── reputation.py     # opt-in VirusTotal / MalwareBazaar hash lookup
 │   ├── summary.py        # flat per-sample rows for batch CSV/JSONL
-│   └── cli.py            # argparse CLI, exit codes
-├── rules/                # bundled starter YARA rules
+│   ├── cli.py            # argparse CLI, exit codes
+│   └── rules/            # bundled starter YARA rules (packaged with the wheel)
 └── tests/                # pytest: unit per module + e2e on notepad.exe
 ```
 
