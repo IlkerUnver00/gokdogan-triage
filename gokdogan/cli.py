@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .cluster import cluster_reports
 from .engine import NotAPEError, triage
 from .fuzzy import compare_ssdeep, compare_tlsh, ssdeep_hash, tlsh_hash
 from .html_report import render_html
@@ -59,6 +60,20 @@ def _print_comparison(report, ref_ssdeep: str | None, ref_tlsh: str | None) -> N
     if not parts:
         parts.append("no comparable fuzzy hashes")
     print(f"  compare vs reference: {'; '.join(parts)}")
+
+
+def _print_clusters(reports: list) -> None:
+    clusters = cluster_reports(reports)
+    print(f"\n── Clusters ── {len(reports)} sample(s), "
+          f"{len(clusters)} related group(s)", file=sys.stderr)
+    if not clusters:
+        print("  no related samples found", file=sys.stderr)
+        return
+    for i, cluster in enumerate(clusters, 1):
+        print(f"  [{i}] {len(cluster.members)} files "
+              f"(by {', '.join(cluster.bases)}):", file=sys.stderr)
+        for path in cluster.members:
+            print(f"        {path}", file=sys.stderr)
 
 
 def _collect_targets(path: Path) -> list[Path]:
@@ -106,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="skip Authenticode signature verification (Windows-only, offline)")
     parser.add_argument("--min-strlen", type=int, default=6, metavar="N",
                         help="minimum string length to extract (default 6)")
+    parser.add_argument("--cluster", action="store_true",
+                        help="group related samples in a directory by shared hashes / fuzzy similarity")
     parser.add_argument("--quiet", action="store_true", help="one summary line per file instead of a full report")
     parser.add_argument("--version", action="version", version=f"gokdogan {__version__}")
     args = parser.parse_args(argv)
@@ -140,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     # explicitly asked for; the CSV/JSONL is the deliverable.
     batch = bool(args.csv or args.jsonl)
     rows = []
+    reports = []
     tally = {Verdict.LIKELY_CLEAN: 0, Verdict.SUSPICIOUS: 0, Verdict.HIGH_RISK: 0}
 
     worst = 0
@@ -164,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.reputation:
             report.reputation = reputation_lookup(report.file.sha256, args.vt_key, args.mb_key)
 
-        if args.quiet or batch:
+        if args.quiet or batch or args.cluster:
             print(f"{report.verdict.value:<13} score={report.score:<4} "
                   f"{report.file.sha256[:16]}  {target}")
         else:
@@ -191,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if batch:
             rows.append(summary_row(report))
+        if args.cluster:
+            reports.append(report)
         tally[report.verdict] += 1
         worst = max(worst, _EXIT[report.verdict])
 
@@ -198,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
         write_csv(rows, args.csv)
     if args.jsonl:
         write_jsonl(rows, args.jsonl)
+    if args.cluster:
+        _print_clusters(reports)
 
     scanned = sum(tally.values())
     if scanned > 1 or batch:
