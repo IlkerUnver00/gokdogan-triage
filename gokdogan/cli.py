@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .baseline import diff_reports
 from .cluster import cluster_reports
 from .engine import NotAPEError, triage
 from .fuzzy import compare_ssdeep, compare_tlsh, ssdeep_hash, tlsh_hash
@@ -76,6 +77,25 @@ def _print_clusters(reports: list) -> None:
             print(f"        {path}", file=sys.stderr)
 
 
+def _print_baseline_diff(report, baseline_report) -> None:
+    d = diff_reports(report, baseline_report)
+    if d.identical:
+        print("  baseline: identical to reference (bit-for-bit minus signature)")
+        return
+    bits = [f"imphash {'match' if d.same_imphash else 'DIFFERS'}"]
+    if d.sections_added:
+        bits.append(f"+sections {','.join(d.sections_added)}")
+    if d.sections_removed:
+        bits.append(f"-sections {','.join(d.sections_removed)}")
+    if d.sections_changed:
+        bits.append(f"changed {','.join(d.sections_changed)}")
+    if abs(d.entropy_delta) >= 0.1:
+        bits.append(f"entropy {d.entropy_delta:+.2f}")
+    if d.capabilities_added:
+        bits.append(f"NEW capabilities: {', '.join(d.capabilities_added)}")
+    print(f"  baseline diff: {'; '.join(bits)}")
+
+
 def _collect_targets(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
@@ -104,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compare", metavar="PATH",
                         help="reference file to fuzzy-compare each target against "
                              "(prints ssdeep similarity 0-100 and TLSH distance)")
+    parser.add_argument("--baseline", metavar="PATH",
+                        help="known-good reference PE to diff each target against "
+                             "(sections/hashes/capabilities added or changed)")
     parser.add_argument("--csv", metavar="PATH",
                         help="write a one-row-per-sample CSV summary (batch triage)")
     parser.add_argument("--jsonl", metavar="PATH",
@@ -143,6 +166,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"note: --reputation will send {len(targets)} SHA-256 hash(es) (not the files) "
               "to VirusTotal/MalwareBazaar", file=sys.stderr)
+
+    baseline_report = None
+    if args.baseline:
+        try:
+            baseline_report = triage(args.baseline, use_yara=False, verify_signature=False)
+        except (NotAPEError, OSError) as exc:
+            print(f"error reading --baseline reference {args.baseline}: {exc}", file=sys.stderr)
+            return 1
 
     ref_ssdeep = ref_tlsh = None
     if args.compare:
@@ -190,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.compare:
             _print_comparison(report, ref_ssdeep, ref_tlsh)
+        if baseline_report is not None:
+            _print_baseline_diff(report, baseline_report)
 
         if json_dir is not None:
             (json_dir / (target.name + ".json")).write_text(render_json(report), encoding="utf-8")
