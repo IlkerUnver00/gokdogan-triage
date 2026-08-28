@@ -287,8 +287,9 @@ gokdogan/
   - [x] extra clustering hashes (authentihash, impfuzzy) + `--cluster` / `--baseline`
   - [x] MISP event export (`--misp`) for threat-intel sharing
   - [x] ruff lint + coverage in CI
-  - [ ] true stack-string recovery via lightweight emulation
-  - [ ] FastAPI upload-and-triage service; PyPI + Docker packaging
+  - [x] pattern-based stack-string recovery (no emulator dependency)
+  - [x] pluggable family config extractors (Discord/Telegram/stager URLs)
+  - [x] FastAPI upload-and-triage service; wheel-packaged rules + Dockerfile
 
 ## Testing
 
