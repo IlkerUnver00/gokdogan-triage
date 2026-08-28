@@ -19,7 +19,7 @@ from .models import TriageReport
 # Stable column order for CSV; also the key order for JSONL objects.
 FIELDS = [
     "path", "sha256", "size", "type", "verdict", "score",
-    "signature", "signer",
+    "signature", "signer", "dotnet",
     "imphash", "rich_hash", "ssdeep",
     "packer", "capabilities", "attack", "yara",
     "embedded_pe", "encoded_strings", "config_blobs", "anomalies",
@@ -63,6 +63,7 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
         "score": report.score,
         "signature": report.signature.status if report.signature else "",
         "signer": report.signature.signer if report.signature else "",
+        "dotnet": (report.dotnet.runtime_version if report.dotnet else ""),
         "imphash": report.file.imphash or "",
         "rich_hash": report.rich.hash if report.rich else "",
         "ssdeep": report.file.ssdeep or "",

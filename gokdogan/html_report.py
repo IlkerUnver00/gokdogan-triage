@@ -128,6 +128,12 @@ def render_html(report: TriageReport) -> str:
         ("signature", _signature_html(report)),
         ("entrypoint", f'0x{f.entry_point:x} in {_esc(f.entry_section or "?")}'),
     ]
+    if report.dotnet is not None:
+        dn = report.dotnet
+        flags = f" [{_esc(', '.join(dn.flags))}]" if dn.flags else ""
+        obf = (f' <span class="flagline">obfuscator: {_esc(", ".join(dn.obfuscators))}</span>'
+               if dn.obfuscators else "")
+        ident.append((".NET", f"managed, CLR {_esc(dn.runtime_version)}{flags}{obf}"))
     parts.append("<h2>File</h2><div class='card'><dl class='grid'>")
     parts.append("".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in ident))
     parts.append("</dl></div>")

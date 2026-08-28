@@ -8,6 +8,7 @@ from .attack import build_attack_summary
 from .blobs import find_config_blobs
 from .capabilities import infer_capabilities
 from .decoded import recover_encoded_strings
+from .dotnet import analyze_dotnet
 from .entropy import shannon_entropy
 from .exports import parse_exports
 from .loader import (
@@ -43,6 +44,7 @@ def triage(
     pe, data = load_pe(path)
     try:
         file_info = build_file_info(path, pe, data)
+        dotnet = analyze_dotnet(pe, data)
         rich = parse_rich_header(pe, data)
         sections = build_sections(pe)
         anomalies = find_anomalies(pe, data, sections)
@@ -71,6 +73,8 @@ def triage(
         anomalies.append(f"Authenticode signature {signature.status}: {signature.note}")
     anomalies.extend(resource_anomalies(resources))
     anomalies.extend(overlay_anomalies(overlay))
+    if dotnet is not None and dotnet.obfuscators:
+        anomalies.append(f".NET obfuscator detected: {', '.join(dotnet.obfuscators)}")
 
     # Delay-loaded APIs count for capability inference just like normal ones.
     merged_imports = dict(imports)
@@ -94,6 +98,7 @@ def triage(
 
     report = TriageReport(
         file=file_info,
+        dotnet=dotnet,
         signature=signature,
         overlay=overlay,
         rich=rich,

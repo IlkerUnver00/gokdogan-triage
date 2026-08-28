@@ -110,6 +110,13 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     stream.write(f"  compiled   : {ts}\n")
     stream.write(f"  signed     : {_signature_line(report, c)}\n")
     stream.write(f"  entrypoint : 0x{f.entry_point:x} in {f.entry_section or '?'}\n")
+    if report.dotnet is not None:
+        dn = report.dotnet
+        flags = f" [{', '.join(dn.flags)}]" if dn.flags else ""
+        stream.write(f"  .NET       : managed assembly, CLR {dn.runtime_version}{flags}\n")
+        if dn.obfuscators:
+            stream.write(c(_YELLOW, f"               obfuscator: {', '.join(dn.obfuscators)}\n"))
+        stream.write(c(_DIM, "               (managed code — import-based capabilities are limited)\n"))
 
     header("Sections")
     stream.write(f"  {'name':<10} {'raw size':>10} {'entropy':>8}  flags\n")

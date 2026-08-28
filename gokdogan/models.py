@@ -40,6 +40,14 @@ class FileInfo:
 
 
 @dataclass
+class DotNetInfo:
+    runtime_version: str          # CLR runtime version, e.g. "2.5"
+    flags: list[str] = field(default_factory=list)         # IL only, 32-bit required, ...
+    entry_point_token: str = ""
+    obfuscators: list[str] = field(default_factory=list)   # detected .NET obfuscators
+
+
+@dataclass
 class OverlayInfo:
     offset: int
     size: int
@@ -188,6 +196,7 @@ class ScoreEntry:
 @dataclass
 class TriageReport:
     file: FileInfo
+    dotnet: DotNetInfo | None = None
     signature: SignatureInfo | None = None
     overlay: OverlayInfo | None = None
     rich: RichHeader | None = None
