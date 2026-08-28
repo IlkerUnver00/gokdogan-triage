@@ -23,7 +23,7 @@ FIELDS = [
     "imphash", "rich_hash", "ssdeep",
     "packer", "capabilities", "attack", "yara",
     "embedded_pe", "encoded_strings", "config_blobs", "anomalies",
-    "vt", "mb_family",
+    "overlay", "vt", "mb_family",
 ]
 
 
@@ -42,6 +42,13 @@ def _has_embedded_pe(report: TriageReport) -> bool:
     if any(c.name == "embedded-executable" for c in report.capabilities):
         return True
     return any(d.category == "embedded-pe" for d in report.decoded_strings)
+
+
+def _overlay(report: TriageReport) -> str:
+    ov = report.overlay
+    if ov is None or ov.is_signature:
+        return ""
+    return "embedded-pe" if ov.contains_pe else ov.type_guess
 
 
 def summary_row(report: TriageReport) -> dict[str, Any]:
@@ -67,6 +74,7 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
         "encoded_strings": len(report.decoded_strings),
         "config_blobs": len(report.config_blobs),
         "anomalies": len(report.anomalies),
+        "overlay": _overlay(report),
         "vt": vt,
         "mb_family": mb_family,
     }

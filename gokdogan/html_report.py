@@ -136,6 +136,7 @@ def render_html(report: TriageReport) -> str:
     parts.append(_capabilities(report))
     parts.append(_attack(report))
     parts.append(_sections(report))
+    parts.append(_overlay(report))
     parts.append(_config_blobs(report))
     parts.append(_resources(report))
     parts.append(_decoded(report))
@@ -221,6 +222,18 @@ def _sections(report: TriageReport) -> str:
             f"<th></th><th>perms</th><th>flags</th></tr>{''.join(rows)}"
             f"<tr><td colspan='6' class='muted'>overall file entropy: "
             f"{report.overall_entropy:.2f}</td></tr></table></div>")
+
+
+def _overlay(report: TriageReport) -> str:
+    ov = report.overlay
+    if ov is None or ov.is_signature:
+        return ""
+    pe = (' <span class="flagline">contains an embedded executable</span>'
+          if ov.contains_pe else "")
+    return ("<h2>Overlay</h2><div class='card'>"
+            f"<div>{ov.size:,} bytes ({ov.pct}% of file) at offset "
+            f"<span class='mono'>0x{ov.offset:x}</span>, entropy {ov.entropy:.2f}</div>"
+            f"<div>type: <b>{_esc(ov.type_guess)}</b>{pe}</div></div>")
 
 
 def _config_blobs(report: TriageReport) -> str:

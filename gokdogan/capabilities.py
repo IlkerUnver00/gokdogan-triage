@@ -190,6 +190,7 @@ def infer_capabilities(
     exports: ExportInfo | None = None,
     decoded: list[DecodedString] | None = None,
     config_blobs: list[ConfigBlob] | None = None,
+    overlay=None,
 ) -> list[Capability]:
     all_apis = {api.lower(): api for apis in imports.values() for api in apis}
     capabilities: list[Capability] = []
@@ -244,18 +245,23 @@ def infer_capabilities(
             )
         )
 
-    # --- resource-derived (dropper) ----------------------------------
+    # --- resource/overlay-derived (dropper) --------------------------
     embedded = [
         r for r in (resources or [])
         if any(f.startswith("embedded PE") or f.startswith("contains an embedded") for f in r.flags)
     ]
-    if embedded:
+    overlay_pe = overlay is not None and getattr(overlay, "contains_pe", False) \
+        and not getattr(overlay, "is_signature", False)
+    if embedded or overlay_pe:
+        evidence = [f"resource {r.type}/{r.name} ({r.size} bytes)" for r in embedded[:5]]
+        if overlay_pe:
+            evidence.append(f"overlay ({overlay.size} bytes) at offset 0x{overlay.offset:x}")
         capabilities.append(
             Capability(
                 name="embedded-executable",
-                description="Carries a second executable inside its resources (dropper)",
+                description="Carries a second executable inside its resources/overlay (dropper)",
                 severity=3,
-                evidence=[f"resource {r.type}/{r.name} ({r.size} bytes)" for r in embedded[:5]],
+                evidence=evidence,
                 attack=techniques_for("embedded-executable"),
             )
         )

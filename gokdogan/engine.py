@@ -22,6 +22,7 @@ from .loader import (
 from .models import TriageReport
 from .packers import detect_packer
 from .models import SignatureInfo
+from .overlay import analyze_overlay, overlay_anomalies
 from .resources import resource_anomalies, walk_resources
 from .rich import parse_rich_header
 from .signature import verify as verify_signature_file
@@ -47,6 +48,7 @@ def triage(
         sections = build_sections(pe)
         anomalies = find_anomalies(pe, data, sections)
         resources = walk_resources(pe)
+        overlay = analyze_overlay(pe, data)
         config_blobs = find_config_blobs(pe)
         imports = imported_functions(pe)
         delay = delay_imported_functions(pe)
@@ -69,6 +71,7 @@ def triage(
     if signature.status in ("tampered", "revoked"):
         anomalies.append(f"Authenticode signature {signature.status}: {signature.note}")
     anomalies.extend(resource_anomalies(resources))
+    anomalies.extend(overlay_anomalies(overlay))
 
     # Delay-loaded APIs count for capability inference just like normal ones.
     merged_imports = dict(imports)
@@ -80,7 +83,7 @@ def triage(
     string_hits, string_stats = analyze_strings(data, min_string_length)
     decoded_strings = recover_encoded_strings(data)
     capabilities = infer_capabilities(
-        merged_imports, string_hits, resources, exports, decoded_strings, config_blobs
+        merged_imports, string_hits, resources, exports, decoded_strings, config_blobs, overlay
     )
 
     if use_yara:
@@ -93,6 +96,7 @@ def triage(
     report = TriageReport(
         file=file_info,
         signature=signature,
+        overlay=overlay,
         rich=rich,
         sections=sections,
         resources=resources,

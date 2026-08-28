@@ -122,6 +122,16 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         stream.write(f"  {s.name:<10} {s.raw_size:>10,} {ent:>8}  {flags.strip()}\n")
     stream.write(f"  overall file entropy: {report.overall_entropy:.2f}\n")
 
+    ov = report.overlay
+    if ov is not None and not ov.is_signature:
+        header("Overlay")
+        stream.write(f"  {ov.size:,} bytes ({ov.pct}% of file) at offset 0x{ov.offset:x}, "
+                     f"entropy {ov.entropy:.2f}\n")
+        stream.write(f"  type: {ov.type_guess}")
+        if ov.contains_pe:
+            stream.write(c(_RED, "  [contains embedded executable]"))
+        stream.write("\n")
+
     if report.rich is not None:
         header("Rich header (toolchain)")
         if report.rich.checksum_valid is True:

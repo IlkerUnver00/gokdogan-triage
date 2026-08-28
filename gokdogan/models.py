@@ -40,6 +40,17 @@ class FileInfo:
 
 
 @dataclass
+class OverlayInfo:
+    offset: int
+    size: int
+    pct: float           # overlay as a percentage of file size
+    entropy: float
+    type_guess: str      # magic-byte file-type label, or "unknown"
+    contains_pe: bool
+    is_signature: bool   # overlay is (just) the Authenticode blob
+
+
+@dataclass
 class SignatureInfo:
     status: str          # valid | tampered | expired | untrusted | revoked | unsigned | invalid | unavailable
     present: bool = False   # an actual signature was found
@@ -178,6 +189,7 @@ class ScoreEntry:
 class TriageReport:
     file: FileInfo
     signature: "SignatureInfo | None" = None
+    overlay: "OverlayInfo | None" = None
     rich: "RichHeader | None" = None
     sections: list[SectionInfo] = field(default_factory=list)
     resources: list[ResourceInfo] = field(default_factory=list)

@@ -162,17 +162,8 @@ def find_anomalies(pe: pefile.PE, data: bytes, sections: list[SectionInfo]) -> l
         if callbacks:
             anomalies.append("TLS callbacks present (code runs before entry point)")
 
-    # Overlay: data appended past the last section.
-    overlay_offset = pe.get_overlay_data_start_offset()
-    if overlay_offset is not None:
-        overlay_size = len(data) - overlay_offset
-        # Signed files legitimately carry the Authenticode blob as overlay.
-        security_dir = pe.OPTIONAL_HEADER.DATA_DIRECTORY[
-            pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_SECURITY"]
-        ]
-        if overlay_size > max(security_dir.Size, 0) + 4096:
-            pct = 100 * overlay_size // len(data)
-            anomalies.append(f"overlay of {overlay_size} bytes ({pct}% of file) beyond last section")
+    # Overlay content is analyzed separately (see overlay.py); its findings
+    # are folded into the report's anomalies by the engine.
 
     # Checksum mismatch (most malware doesn't bother fixing it; installers do).
     declared = pe.OPTIONAL_HEADER.CheckSum
