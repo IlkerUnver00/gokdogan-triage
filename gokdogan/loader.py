@@ -14,6 +14,7 @@ import pefile
 
 from .entropy import HIGH_ENTROPY, shannon_entropy
 from .fuzzy import ssdeep_hash, tlsh_hash
+from .hashes import authentihash
 from .models import FileInfo, SectionInfo
 
 # Machine types we bother to name.
@@ -109,6 +110,7 @@ def build_file_info(path: str | Path, pe: pefile.PE, data: bytes) -> FileInfo:
         is_signed=security_dir.VirtualAddress != 0 and security_dir.Size > 0,
         entry_point=pe.OPTIONAL_HEADER.AddressOfEntryPoint,
         entry_section=_entry_section(pe),
+        authentihash=authentihash(pe, data),
     )
 
 

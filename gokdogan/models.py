@@ -37,6 +37,8 @@ class FileInfo:
     is_signed: bool         # has a security directory (Authenticode blob present)
     entry_point: int
     entry_section: str | None
+    authentihash: str | None = None  # signature-independent PE hash (clustering)
+    impfuzzy: str | None = None      # ssdeep of the import list (clustering)
 
 
 @dataclass

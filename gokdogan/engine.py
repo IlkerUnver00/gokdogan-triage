@@ -11,6 +11,7 @@ from .decoded import recover_encoded_strings
 from .dotnet import analyze_dotnet
 from .entropy import shannon_entropy
 from .exports import parse_exports
+from .hashes import impfuzzy
 from .loader import (
     NotAPEError,
     build_file_info,
@@ -54,6 +55,7 @@ def triage(
         imports = imported_functions(pe)
         delay = delay_imported_functions(pe)
         exports = parse_exports(pe, Path(path).name)
+        file_info.impfuzzy = impfuzzy(imports)
     finally:
         pe.close()
 

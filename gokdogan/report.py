@@ -95,7 +95,9 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     stream.write(f"  sha256     : {f.sha256}\n")
     stream.write(f"  md5        : {f.md5}\n")
     stream.write(f"  imphash    : {f.imphash or '-'}\n")
+    stream.write(f"  impfuzzy   : {f.impfuzzy or '-'}\n")
     stream.write(f"  rich_hash  : {report.rich.hash if report.rich else '-'}\n")
+    stream.write(f"  authentihash: {f.authentihash or '-'}\n")
     stream.write(f"  ssdeep     : {f.ssdeep or '-'}\n")
     stream.write(f"  tlsh       : {f.tlsh or '-'}\n")
     if f.ssdeep is None and f.tlsh is None:

@@ -20,7 +20,7 @@ from .models import TriageReport
 FIELDS = [
     "path", "sha256", "size", "type", "verdict", "score",
     "signature", "signer", "dotnet",
-    "imphash", "rich_hash", "ssdeep",
+    "imphash", "impfuzzy", "authentihash", "rich_hash", "ssdeep",
     "packer", "capabilities", "attack", "yara",
     "embedded_pe", "encoded_strings", "config_blobs", "anomalies",
     "overlay", "vt", "mb_family",
@@ -65,6 +65,8 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
         "signer": report.signature.signer if report.signature else "",
         "dotnet": (report.dotnet.runtime_version if report.dotnet else ""),
         "imphash": report.file.imphash or "",
+        "impfuzzy": report.file.impfuzzy or "",
+        "authentihash": report.file.authentihash or "",
         "rich_hash": report.rich.hash if report.rich else "",
         "ssdeep": report.file.ssdeep or "",
         "packer": ", ".join(report.packer.names) if report.packer.detected else "",
