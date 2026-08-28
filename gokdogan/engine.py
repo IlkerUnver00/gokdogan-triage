@@ -28,6 +28,7 @@ from .packers import detect_packer
 from .resources import resource_anomalies, walk_resources
 from .rich import parse_rich_header
 from .signature import verify as verify_signature_file
+from .stackstrings import recover_stackstrings
 from .strings_ext import analyze_strings
 from .verdict import score_report
 from .yara_scan import scan as yara_scan
@@ -57,6 +58,7 @@ def triage(
         delay = delay_imported_functions(pe)
         exports = parse_exports(pe, Path(path).name)
         file_info.impfuzzy = impfuzzy(imports)
+        stack_strings = recover_stackstrings(pe)
     finally:
         pe.close()
 
@@ -87,7 +89,7 @@ def triage(
     import_count = sum(len(v) for v in merged_imports.values())
     packer = detect_packer(sections, import_count)
     string_hits, string_stats = analyze_strings(data, min_string_length)
-    decoded_strings = recover_encoded_strings(data)
+    decoded_strings = recover_encoded_strings(data) + stack_strings
     config_extractions = extract_config(data, [d.value for d in decoded_strings])
     capabilities = infer_capabilities(
         merged_imports, string_hits, resources, exports, decoded_strings, config_blobs, overlay
