@@ -71,6 +71,21 @@ deserve a full analyst's attention. (The package and command are the ASCII
 
 ## Install
 
+### On any Windows PC — no Python needed
+
+Grab a binary from the [Releases](https://github.com/IlkerUnver00/gokdogan-triage/releases) page:
+
+- **`gokdogan-setup.exe`** — installer. Per-user (no admin prompt), optionally
+  adds `gokdogan` to your PATH, registers an uninstaller.
+- **`gokdogan.exe`** — standalone single-file CLI. Copy it anywhere and run it.
+
+Both embed Python, every dependency, and the bundled YARA rules. Build them
+yourself with `.\packaging\build_exe.ps1` (PyInstaller) and
+`ISCC.exe packaging\gokdogan.iss` (Inno Setup); pushing a `v*` tag builds and
+attaches both to a GitHub Release automatically.
+
+### From source
+
 ```bash
 pip install -e .[dev]
 ```

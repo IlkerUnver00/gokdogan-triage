@@ -5,4 +5,4 @@ packer indicators, classified strings, import-based capabilities,
 YARA matches) and produces a weighted triage verdict.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"

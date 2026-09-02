@@ -1,0 +1,59 @@
+name: release
+
+# Push a version tag to cut a release with Windows binaries attached:
+#
+#   git tag v0.5.0 && git push origin v0.5.0
+#
+# Produces and attaches to the GitHub Release:
+#   gokdogan.exe        standalone single-file CLI (no Python needed)
+#   gokdogan-setup.exe  installer (per-user, optional PATH entry, uninstaller)
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows-binaries:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package (with YARA) and PyInstaller
+        run: pip install -e ".[yara]" pyinstaller
+
+      - name: Build standalone gokdogan.exe
+        run: .\packaging\build_exe.ps1
+
+      - name: Smoke-test the frozen binary
+        run: |
+          .\dist\gokdogan.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "--version failed" }
+          # Triage exit codes 0/2/3 are verdicts (clean/suspicious/high-risk),
+          # not errors; only 1 (usage/parse error) or a crash should fail here.
+          .\dist\gokdogan.exe C:\Windows\System32\notepad.exe --quiet --no-yara
+          if ($LASTEXITCODE -notin 0, 2, 3) { throw "frozen triage failed with exit $LASTEXITCODE" }
+          exit 0
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build gokdogan-setup.exe
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\gokdogan.iss
+
+      - name: Create GitHub Release with binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            dist\gokdogan.exe dist\gokdogan-setup.exe `
+            --title "gokdogan ${{ github.ref_name }}" `
+            --notes "Windows binaries for gokdogan ${{ github.ref_name }}.`n`n- **gokdogan-setup.exe** — installer (per-user, no admin; optionally adds gokdogan to PATH)`n- **gokdogan.exe** — standalone single-file CLI, copy anywhere and run. No Python required.`n`nStatic triage only: the sample is never executed."
