@@ -1,6 +1,7 @@
 # gokdogan 🦅
 
 [![tests](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/IlkerUnver00/gokdogan-triage?label=release)](https://github.com/IlkerUnver00/gokdogan-triage/releases)
 [![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![ruff](https://img.shields.io/badge/lint-ruff-orange)](https://docs.astral.sh/ruff/)
 [![license](https://img.shields.io/badge/license-MIT-green)](#license)
