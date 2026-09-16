@@ -24,7 +24,17 @@ deserve a full analyst's attention. (The package and command are the ASCII
 > 📐 **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) (English) ·
 > [MIMARI.md](MIMARI.md) (Türkçe) ·
 > **[live visual page ↗](https://ilkerunver00.github.io/gokdogan-triage/)**
-> ([source](docs/index.html))
+> ([source](docs/index.html)) · [changelog](CHANGELOG.md)
+
+<p align="center">
+  <img src="assets/demo-report.png" width="820"
+       alt="gokdogan's self-contained HTML report for a demo sample — HIGH RISK verdict (score 140) with the full per-point scoring rationale, file identity, and capability tags mapped to MITRE ATT&CK">
+  <br>
+  <em>gokdogan's self-contained HTML report for a network-free
+  <a href="examples/make_demo_sample.py">demo sample</a> — every point in the
+  verdict carries a reason. The same triage also renders to console, JSON,
+  CSV/JSONL, ATT&amp;CK Navigator, and MISP.</em>
+</p>
 
 ## What it does
 
