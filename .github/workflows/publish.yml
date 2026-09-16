@@ -1,13 +1,11 @@
 name: publish
 
-# Publish the sdist + wheel to PyPI. Runs on a version tag or a manual
-# dispatch. ONE-TIME SETUP required on PyPI before this can succeed: add a
-# "trusted publisher" for this repo+workflow (PyPI → project → Publishing),
-# so no API token is stored here. Until that is configured the publish step
-# fails harmlessly and does not affect the binary release in release.yml.
+# Publish the sdist + wheel to PyPI. MANUAL ONLY (Actions → publish → Run
+# workflow) so it never red-X's a release before PyPI is set up. ONE-TIME
+# SETUP on PyPI first: add a "trusted publisher" for this repo + this
+# workflow (PyPI → project → Publishing) — no API token is stored here.
+# Once configured, run it by hand (optionally after tagging a release).
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 jobs:
