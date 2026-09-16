@@ -11,7 +11,6 @@ on:
 jobs:
   pypi:
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       id-token: write        # trusted publishing (OIDC) — no stored token
     steps:
