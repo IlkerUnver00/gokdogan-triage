@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/IlkerUnver00/gokdogan-triage?label=release)](https://github.com/IlkerUnver00/gokdogan-triage/releases)
+[![PyPI](https://img.shields.io/pypi/v/gokdogan-triage?label=pypi)](https://pypi.org/project/gokdogan-triage/)
 [![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![ruff](https://img.shields.io/badge/lint-ruff-orange)](https://docs.astral.sh/ruff/)
 [![license](https://img.shields.io/badge/license-MIT-green)](#license)
@@ -84,6 +85,24 @@ Both embed Python, every dependency, and the bundled YARA rules. Build them
 yourself with `.\packaging\build_exe.ps1` (PyInstaller) and
 `ISCC.exe packaging\gokdogan.iss` (Inno Setup); pushing a `v*` tag builds and
 attaches both to a GitHub Release automatically.
+
+### From PyPI
+
+If you already have Python 3.12+, install the published package:
+
+```bash
+pip install gokdogan-triage
+```
+
+This pulls the pure-Python core (`pefile`, `ppdeep`) and the bundled YARA
+rules, and puts the `gokdogan` command on your PATH. Add optional extras when
+you want them:
+
+```bash
+pip install "gokdogan-triage[yara]"   # yara-python — activates the YARA stage
+pip install "gokdogan-triage[tlsh]"   # TLSH fuzzy hashing (needs a C++ compiler)
+pip install "gokdogan-triage[web]"    # FastAPI upload-and-triage service
+```
 
 ### From source
 
