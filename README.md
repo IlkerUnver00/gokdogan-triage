@@ -27,13 +27,13 @@ deserve a full analyst's attention. (The package and command are the ASCII
 > ([source](docs/index.html)) · [changelog](CHANGELOG.md)
 
 <p align="center">
-  <img src="assets/demo-report.png" width="820"
-       alt="gokdogan's self-contained HTML report for a demo sample — HIGH RISK verdict (score 140) with the full per-point scoring rationale, file identity, and capability tags mapped to MITRE ATT&CK">
+  <img src="assets/gokdogan-demo.gif" width="820"
+       alt="gokdogan triaging a demo sample in the terminal — the report streams in and ends on a HIGH RISK verdict, score 140">
   <br>
-  <em>gokdogan's self-contained HTML report for a network-free
-  <a href="examples/make_demo_sample.py">demo sample</a> — every point in the
-  verdict carries a reason. The same triage also renders to console, JSON,
-  CSV/JSONL, ATT&amp;CK Navigator, and MISP.</em>
+  <em>Static triage of a network-free
+  <a href="examples/make_demo_sample.py">demo sample</a>: hashes, capabilities,
+  MITRE ATT&amp;CK, recovered C2, and a transparent weighted verdict — the
+  sample is never executed.</em>
 </p>
 
 ## What it does
@@ -252,6 +252,13 @@ gokdogan triage report — invoice_scan.exe
   ...
   HIGH RISK  (score 74, thresholds: suspicious ≥ 30, high risk ≥ 60)
 ```
+
+The same triage rendered as a self-contained HTML case file (`--html`):
+
+<p align="center">
+  <img src="assets/demo-report.png" width="760"
+       alt="gokdogan's self-contained HTML report — HIGH RISK verdict with the full per-point scoring rationale, file identity, and capability tags mapped to MITRE ATT&CK">
+</p>
 
 ## Project layout
 
