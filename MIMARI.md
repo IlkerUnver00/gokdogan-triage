@@ -9,7 +9,7 @@
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
 - 31 odaklı modülde **~4.500 satır** Python
-- **~1.900 satır** test · **163 test** · gerçek binary entegrasyon paketi
+- **~1.900 satır** test · **173 test** · gerçek binary entegrasyon paketi
 - Zorunlu bağımlılık: `pefile`, `ppdeep` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için
@@ -184,7 +184,7 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**163 test / ~1.900 satır.** Birim testleri her analizciyi sentetik girdilerle
+**173 test / ~1.900 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
 ekilmiş entropi adaları). Entegrasyon paketi tüm boru hattını gerçek sistem
 binary'lerine (`notepad.exe`, `kernel32.dll`, `mmc.exe`) karşı çalıştırır ve

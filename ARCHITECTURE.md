@@ -8,7 +8,7 @@ extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
 - **~4,500 lines** of Python across 31 focused modules
-- **~1,900 lines** of tests · **163 tests** · real-binary integration suite
+- **~1,900 lines** of tests · **173 tests** · real-binary integration suite
 - Hard deps: `pefile`, `ppdeep` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
@@ -182,7 +182,7 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**163 tests / ~1,900 lines.** Unit tests cover each analyzer in isolation with
+**173 tests / ~1,900 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
 entropy islands). The integration suite runs the full pipeline against real
 system binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe`) and asserts that
