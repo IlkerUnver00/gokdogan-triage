@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "gokdogan-triage"
-version = "0.5.0"
+version = "0.5.1"
 description = "Static PE malware triage engine: imphash, entropy, packer detection, string classification, capability tagging, YARA, weighted verdict."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "İlker Ünver" }]
 keywords = ["malware", "triage", "PE", "yara", "dfir", "static-analysis"]
 classifiers = [
@@ -26,6 +27,12 @@ tlsh = ["py-tlsh>=4.7"]
 web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.6", "yara-python>=4.3",
        "fastapi>=0.110", "httpx>=0.27", "python-multipart>=0.0.9"]
+
+[project.urls]
+Homepage = "https://github.com/IlkerUnver00/gokdogan-triage"
+Repository = "https://github.com/IlkerUnver00/gokdogan-triage"
+Issues = "https://github.com/IlkerUnver00/gokdogan-triage/issues"
+Documentation = "https://ilkerunver00.github.io/gokdogan-triage/"
 
 [project.scripts]
 gokdogan = "gokdogan.cli:main"

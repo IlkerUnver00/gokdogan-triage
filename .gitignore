@@ -8,3 +8,5 @@ dist/
 .venv/
 reports/
 samples/
+.coverage
+.coverage.*

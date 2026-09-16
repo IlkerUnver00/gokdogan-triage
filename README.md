@@ -154,6 +154,11 @@ gokdogan sample.exe --misp sample.misp.json
 # your own rule set
 gokdogan sample.exe --rules C:\rules\team-rules
 
+# tuning / skips
+gokdogan sample.exe --min-strlen 8   # longer minimum string length (default 6)
+gokdogan sample.exe --no-yara        # skip the YARA stage
+gokdogan sample.exe --no-verify-sig  # skip Authenticode verification (Windows-only)
+
 # opt-in reputation: sends ONLY the SHA-256 (never the file) to VT/MalwareBazaar
 gokdogan sample.exe --reputation --vt-key $VT_API_KEY
 ```

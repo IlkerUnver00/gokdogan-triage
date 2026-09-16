@@ -24,6 +24,10 @@ from .html_report import render_html
 
 app = FastAPI(title="gokdogan", version=__version__)
 
+# Largest upload accepted. PEs are rarely over a few tens of MB; the cap keeps
+# a hostile client from pushing the process into swap with a huge body.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
 _INDEX = """<!doctype html><html><head><meta charset="utf-8">
 <title>gokdogan</title><style>
 body{font:16px/1.5 system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;
@@ -52,6 +56,21 @@ def index() -> str:
     return _INDEX
 
 
+async def _read_limited(file: UploadFile) -> bytes | None:
+    """Read an upload in chunks; return None as soon as it exceeds the cap."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _triage_upload(data: bytes, filename: str = "upload"):
     """Write the upload to a temp file, triage it, and clean up.
 
@@ -74,7 +93,10 @@ def _triage_upload(data: bytes, filename: str = "upload"):
 
 @app.post("/triage", response_class=HTMLResponse)
 async def triage_html(file: UploadFile = File(...)):
-    data = await file.read()
+    data = await _read_limited(file)
+    if data is None:
+        return HTMLResponse(f"<p>File too large (limit {MAX_UPLOAD_BYTES // (1024 * 1024)} MB).</p>",
+                            status_code=413)
     try:
         report = _triage_upload(data, file.filename or "upload")
     except NotAPEError as exc:
@@ -84,7 +106,9 @@ async def triage_html(file: UploadFile = File(...)):
 
 @app.post("/api/triage")
 async def triage_json(file: UploadFile = File(...)):
-    data = await file.read()
+    data = await _read_limited(file)
+    if data is None:
+        return JSONResponse({"error": f"file too large (limit {MAX_UPLOAD_BYTES} bytes)"}, status_code=413)
     try:
         report = _triage_upload(data, file.filename or "upload")
     except NotAPEError as exc:

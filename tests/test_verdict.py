@@ -7,7 +7,7 @@ from gokdogan.models import (
     Verdict,
     YaraHit,
 )
-from gokdogan.verdict import score_report
+from gokdogan.verdict import SUSPICIOUS_THRESHOLD, score_report
 
 
 def _file_info(**overrides):
@@ -106,3 +106,49 @@ def test_score_never_negative():
     report = TriageReport(file=_file_info(is_signed=True))
     score_report(report)
     assert report.score == 0
+
+
+def _sev3_injector():
+    return [Capability("process-injection", "injects", 3, ["WriteProcessMemory"], attack=["T1055"])]
+
+
+def test_reputation_virustotal_feeds_score():
+    from gokdogan.models import Reputation
+    rep = [Reputation("VirusTotal", "found", detections="50/72", family="trojan.emotet")]
+    report = TriageReport(file=_file_info(), reputation=rep)
+    score_report(report)
+    assert any("VirusTotal" in e.reason for e in report.score_breakdown)
+    assert report.verdict in (Verdict.SUSPICIOUS, Verdict.HIGH_RISK)
+
+
+def test_reputation_low_detection_is_modest():
+    from gokdogan.models import Reputation
+    rep = [Reputation("VirusTotal", "found", detections="1/72")]
+    report = TriageReport(file=_file_info(), reputation=rep)
+    score_report(report)
+    assert report.score < SUSPICIOUS_THRESHOLD  # 1/72 alone shouldn't flag
+
+
+def test_valid_signature_floor_keeps_sev3_suspicious():
+    # pre-signature score already >= SUSPICIOUS; a valid sig must not clear it
+    report = TriageReport(
+        file=_file_info(is_signed=True),
+        capabilities=_sev3_injector() + [
+            Capability("network", "", 2, []), Capability("persistence-registry", "", 2, [])],
+        signature=SignatureInfo(status="valid", present=True, verified=True, signer="StolenCert"),
+    )
+    score_report(report)
+    assert report.verdict == Verdict.SUSPICIOUS
+    assert report.score >= SUSPICIOUS_THRESHOLD
+    assert any("floor" in e.reason for e in report.score_breakdown)
+
+
+def test_valid_signature_still_clears_benign():
+    # a benign signed file (no sev-3, low base) must still land LIKELY_CLEAN
+    report = TriageReport(
+        file=_file_info(is_signed=True),
+        capabilities=[Capability("network", "", 2, [])],
+        signature=SignatureInfo(status="valid", present=True, verified=True, signer="MS"),
+    )
+    score_report(report)
+    assert report.verdict == Verdict.LIKELY_CLEAN

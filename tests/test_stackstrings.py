@@ -58,3 +58,11 @@ def test_recover_stackstrings_from_fake_pe():
     pe = SimpleNamespace(sections=[data_section, section])
     values = [d.value for d in recover_stackstrings(pe)]
     assert "http://c2.example" in values
+
+
+def test_rex_prefixed_x64_stackstring():
+    # REX.W (0x48) prefix before each C6 45 store — common in x64 code
+    def rex_ebp(disp, ch):
+        return bytes([0x48, 0xC6, 0x45, disp & 0xFF, ord(ch)])
+    code = b"".join(rex_ebp(-0x20 + i, c) for i, c in enumerate("http://x.io"))
+    assert "http://x.io" in _recover(code)

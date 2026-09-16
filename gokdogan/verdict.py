@@ -77,9 +77,36 @@ def score_report(report: TriageReport) -> None:
     # Authenticode: a *verified* signature is a real mitigation; a tampered
     # or revoked one is damning; a present-but-unverified blob is a weak
     # mitigation (unsigned + suspicious is the more common malware shape).
+    # Online reputation (opt-in, attached by the CLI): the wider world's verdict.
+    rep_points, rep_reasons = 0, []
+    for rep in report.reputation:
+        if rep.status != "found":
+            continue
+        if rep.source == "VirusTotal" and rep.detections:
+            mal, _, total = rep.detections.partition("/")
+            try:
+                mal_n, total_n = int(mal), int(total)
+            except ValueError:
+                mal_n, total_n = 0, 0
+            ratio = mal_n / total_n if total_n else 0.0
+            pts = 30 if ratio >= 0.5 else 20 if ratio >= 0.2 else 10 if mal_n >= 1 else 0
+            if pts:
+                rep_points += pts
+                rep_reasons.append(f"VirusTotal {rep.detections} engines flag it")
+        elif rep.source == "MalwareBazaar":
+            rep_points += 20
+            rep_reasons.append("known sample on MalwareBazaar" + (f" ({rep.family})" if rep.family else ""))
+    if rep_points:
+        entries.append(ScoreEntry(min(rep_points, 35), "reputation: " + ", ".join(rep_reasons)))
+
     sig = report.signature
+    sig_valid = sig is not None and sig.status == "valid"
     if sig is not None:
-        if sig.status == "valid" and entries:
+        if sig_valid and entries:
+            # A verified signature is a real mitigation. It is intentionally a
+            # flat credit that at most downgrades a sample one tier (it can never
+            # bridge the 30-point gap from HIGH_RISK to LIKELY_CLEAN), and a floor
+            # below stops it clearing a sample that carries a sev-3 capability.
             entries.append(ScoreEntry(-15, f"Authenticode signature valid ({sig.signer or 'signed'})"))
         elif sig.status == "tampered":
             entries.append(ScoreEntry(30, "Authenticode digest mismatch — file modified after signing"))
@@ -90,6 +117,17 @@ def score_report(report: TriageReport) -> None:
 
     report.score_breakdown = entries
     report.score = max(0, sum(e.points for e in entries))
+
+    # Signed malware with a stolen/leaked cert is real: a valid signature must
+    # never pull a sample that carries a high-severity capability all the way
+    # down to LIKELY_CLEAN. Floor it at SUSPICIOUS when the pre-signature score
+    # already crossed that line.
+    if sig_valid and any(c.severity == 3 for c in report.capabilities):
+        pre_sig = sum(e.points for e in entries if not e.reason.startswith("Authenticode signature valid"))
+        if pre_sig >= SUSPICIOUS_THRESHOLD and report.score < SUSPICIOUS_THRESHOLD:
+            report.score = SUSPICIOUS_THRESHOLD
+            report.score_breakdown.append(
+                ScoreEntry(0, "floor: valid signature does not clear a sev-3 capability"))
 
     if report.score >= HIGH_RISK_THRESHOLD:
         report.verdict = Verdict.HIGH_RISK

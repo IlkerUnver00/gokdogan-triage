@@ -25,6 +25,7 @@ from .models import Verdict
 from .report import render_console, render_json, render_navigator_layer
 from .reputation import lookup as reputation_lookup
 from .summary import summary_row, write_csv, write_jsonl
+from .verdict import score_report
 
 PE_EXTENSIONS = {".exe", ".dll", ".sys", ".scr", ".cpl", ".ocx", ".drv", ".efi", ".bin"}
 
@@ -217,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         # offline engine — attached here only when explicitly opted in.
         if args.reputation:
             report.reputation = reputation_lookup(report.file.sha256, args.vt_key, args.mb_key)
+            score_report(report)  # reputation is a scoring signal; re-score with it attached
 
         if args.quiet or batch or args.cluster:
             print(f"{report.verdict.value:<13} score={report.score:<4} "

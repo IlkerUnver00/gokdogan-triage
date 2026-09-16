@@ -42,3 +42,11 @@ def test_triage_json_api():
     body = r.json()
     assert body["file"]["sha256"]
     assert body["verdict"] in ("LIKELY_CLEAN", "SUSPICIOUS", "HIGH_RISK")
+
+
+def test_rejects_oversized_upload(monkeypatch):
+    import gokdogan.web as web
+    monkeypatch.setattr(web, "MAX_UPLOAD_BYTES", 1024)  # shrink the cap for the test
+    big = b"MZ" + b"\x00" * 4096
+    r = client.post("/triage", files={"file": ("big.exe", big, "application/octet-stream")})
+    assert r.status_code == 413

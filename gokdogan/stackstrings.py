@@ -29,7 +29,7 @@ def _printable(byte: int) -> bool:
     return 0x20 <= byte <= 0x7E
 
 
-def _emit(base: str, chars: dict[int, int], out: list[DecodedString], seen: set[str]) -> None:
+def _emit(chars: dict[int, int], out: list[DecodedString], seen: set[str]) -> None:
     if len(chars) < _MIN_LEN:
         return
     # A real stack string writes *consecutive* slots; requiring contiguous
@@ -54,11 +54,17 @@ def _scan(code: bytes, out: list[DecodedString], seen: set[str]) -> None:
     def flush():
         nonlocal run, run_base
         if run:
-            _emit(run_base, run, out, seen)
+            _emit(run, out, seen)
             run = {}
             run_base = ""
 
     while i < n - 2 and len(out) < _MAX_RESULTS:
+        # Tolerate an optional REX prefix (x64): `REX C6 /0 ...` is the same
+        # single-byte stack store with the 64-bit register file; skip the
+        # prefix and let the C6 handler below process the store.
+        if 0x40 <= code[i] <= 0x4F and i + 1 < n and code[i + 1] == 0xC6:
+            i += 1
+            continue
         if code[i] != 0xC6:
             if run:
                 flush()
@@ -90,7 +96,7 @@ def _scan(code: bytes, out: list[DecodedString], seen: set[str]) -> None:
                 flush()
             i += 1
     if run:
-        _emit(run_base, run, out, seen)
+        _emit(run, out, seen)
 
 
 def _s8(b: int) -> int:

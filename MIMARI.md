@@ -8,8 +8,8 @@
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
-- 21 odaklı modülde **~3.300 satır** Python
-- **~1.300 satır** test · **114 test** · gerçek binary entegrasyon paketi
+- 31 odaklı modülde **~4.500 satır** Python
+- **~1.900 satır** test · **163 test** · gerçek binary entegrasyon paketi
 - Zorunlu bağımlılık: `pefile`, `ppdeep` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için
@@ -62,7 +62,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 
 ---
 
-## 3. Modül haritası (21 modül, katmana göre)
+## 3. Modül haritası (31 modül, katmana göre)
 
 **Çekirdek**
 - [`engine.py`](gokdogan/engine.py) — orkestratör; tüm `triage()` boru hattı
@@ -72,16 +72,24 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 **Kimlik & kümeleme**
 - [`fuzzy.py`](gokdogan/fuzzy.py) — ssdeep + opsiyonel TLSH; `--compare` benzerlik
 - [`rich.py`](gokdogan/rich.py) — Rich header hash, `@comp.id` çözümleme, checksum-kurcalama tespiti
+- [`hashes.py`](gokdogan/hashes.py) — authentihash (imza-bağımsız) + impfuzzy import hash
+- [`cluster.py`](gokdogan/cluster.py) — `--cluster` union-find ile dropzone gruplama
+- [`baseline.py`](gokdogan/baseline.py) — `--baseline` bilinen-iyi referansla diff
 
 **Yapı**
 - [`entropy.py`](gokdogan/entropy.py) — Shannon entropi + eşikler
 - [`packers.py`](gokdogan/packers.py) — bilinen packer bölümleri + yapısal sezgiseller
 - [`blobs.py`](gokdogan/blobs.py) — şifreli-config entropi adaları
 - [`resources.py`](gokdogan/resources.py) — `.rsrc` gezici: gömülü PE, yüksek-entropi blob
+- [`overlay.py`](gokdogan/overlay.py) — overlay içeriği: magic-byte tip, entropi, gömülü PE
+- [`signature.py`](gokdogan/signature.py) — Authenticode doğrulama (WinVerifyTrust) + sertifika adları
+- [`dotnet.py`](gokdogan/dotnet.py) — managed/.NET CLR-header tespiti + obfuscator parmak izleri
 
 **İçerik**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE çıkarma + IOC sınıflandırma
 - [`decoded.py`](gokdogan/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string kurtarma
+- [`stackstrings.py`](gokdogan/stackstrings.py) — desen-tabanlı x86 stack-string kurtarma (emülatörsüz)
+- [`extractors.py`](gokdogan/extractors.py) — aile config çıkarımı (Discord/Telegram/stager URL)
 
 **Davranış & istihbarat**
 - [`exports.py`](gokdogan/exports.py) — export tablosu + fırlatma mekanizması tespiti
@@ -95,6 +103,8 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 - [`report.py`](gokdogan/report.py) — ANSI konsol + JSON
 - [`html_report.py`](gokdogan/html_report.py) — tek dosya, escape'li, tema-duyarlı HTML
 - [`summary.py`](gokdogan/summary.py) — batch CSV/JSONL için sample başına düz satır
+- [`misp.py`](gokdogan/misp.py) — threat-intel paylaşımı için MISP event export
+- [`web.py`](gokdogan/web.py) — opsiyonel FastAPI upload-and-triage servisi
 - [`cli.py`](gokdogan/cli.py) — argparse CLI, çıkış kodları, çıktı yönlendirme
 
 ---
@@ -174,7 +184,7 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**114 test / ~1.300 satır.** Birim testleri her analizciyi sentetik girdilerle
+**163 test / ~1.900 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
 ekilmiş entropi adaları). Entegrasyon paketi tüm boru hattını gerçek sistem
 binary'lerine (`notepad.exe`, `kernel32.dll`, `mmc.exe`) karşı çalıştırır ve

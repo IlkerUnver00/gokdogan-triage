@@ -189,8 +189,8 @@ footer .mono{color:var(--faint)}
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="n">~3.300</div><div class="l">satır Python · 21 modül</div></div>
-      <div class="stat"><div class="n">114</div><div class="l">test · gerçek binary entegrasyonu</div></div>
+      <div class="stat"><div class="n">~4.500</div><div class="l">satır Python · 31 modül</div></div>
+      <div class="stat"><div class="n">163</div><div class="l">test · gerçek binary entegrasyonu</div></div>
       <div class="stat"><div class="n">0</div><div class="l">yanlış-pozitif · 150 temiz binary</div></div>
       <div class="stat"><div class="n">133<span style="font-size:.6em;color:var(--muted)">ms</span></div><div class="l">kodlu string taraması (800 KB)</div></div>
     </div>
@@ -240,7 +240,7 @@ footer .mono{color:var(--faint)}
 <section>
   <div class="wrap">
     <span class="eyebrow">Modül haritası</span>
-    <h2>21 modül, altı katman</h2>
+    <h2>31 modül, altı katman</h2>
     <p class="sec-intro">Odaklı, tek sorumluluklu modüller. Her biri paylaşılan dataclass'lara
       yazar; hiçbiri diğerinin iç işleyişine bağlı değildir.</p>
 
@@ -258,6 +258,9 @@ footer .mono{color:var(--faint)}
       <div class="mods">
         <div class="mod"><div class="fn">fuzzy<span class="py">.py</span></div><p>ssdeep + opsiyonel TLSH; --compare benzerlik</p></div>
         <div class="mod"><div class="fn">rich<span class="py">.py</span></div><p>Rich header hash, @comp.id, checksum-kurcalama</p></div>
+        <div class="mod"><div class="fn">hashes<span class="py">.py</span></div><p>authentihash (imza-bağımsız) + impfuzzy</p></div>
+        <div class="mod"><div class="fn">cluster<span class="py">.py</span></div><p>--cluster: dropzone'u aileye göre grupla</p></div>
+        <div class="mod"><div class="fn">baseline<span class="py">.py</span></div><p>--baseline: bilinen-iyi ile diff</p></div>
       </div>
     </div>
 
@@ -268,6 +271,9 @@ footer .mono{color:var(--faint)}
         <div class="mod"><div class="fn">packers<span class="py">.py</span></div><p>bilinen packer bölümleri + sezgiseller</p></div>
         <div class="mod"><div class="fn">blobs<span class="py">.py</span></div><p>şifreli-config entropi adaları</p></div>
         <div class="mod"><div class="fn">resources<span class="py">.py</span></div><p>.rsrc gezici: gömülü PE, yüksek-entropi</p></div>
+        <div class="mod"><div class="fn">overlay<span class="py">.py</span></div><p>overlay içeriği: tip, entropi, gömülü PE</p></div>
+        <div class="mod"><div class="fn">signature<span class="py">.py</span></div><p>Authenticode doğrulama + sertifika</p></div>
+        <div class="mod"><div class="fn">dotnet<span class="py">.py</span></div><p>.NET CLR tespiti + obfuscator izleri</p></div>
       </div>
     </div>
 
@@ -276,6 +282,8 @@ footer .mono{color:var(--faint)}
       <div class="mods">
         <div class="mod"><div class="fn">strings_ext<span class="py">.py</span></div><p>ASCII/UTF-16LE çıkarma + IOC sınıflandırma</p></div>
         <div class="mod"><div class="fn">decoded<span class="py">.py</span></div><p>FLOSS-lite: XOR/ADD/ROL/base64/hex kurtarma</p></div>
+        <div class="mod"><div class="fn">stackstrings<span class="py">.py</span></div><p>desen-tabanlı x86 stack-string kurtarma</p></div>
+        <div class="mod"><div class="fn">extractors<span class="py">.py</span></div><p>aile config: Discord/Telegram/stager URL</p></div>
       </div>
     </div>
 
@@ -297,6 +305,8 @@ footer .mono{color:var(--faint)}
         <div class="mod"><div class="fn">report<span class="py">.py</span></div><p>ANSI konsol + JSON</p></div>
         <div class="mod"><div class="fn">html_report<span class="py">.py</span></div><p>tek dosya, escape'li, tema-duyarlı HTML</p></div>
         <div class="mod"><div class="fn">summary<span class="py">.py</span></div><p>batch CSV/JSONL için düz satırlar</p></div>
+                <div class="mod"><div class="fn">misp<span class="py">.py</span></div><p>MISP event export (threat-intel)</p></div>
+        <div class="mod"><div class="fn">web<span class="py">.py</span></div><p>opsiyonel FastAPI upload-and-triage</p></div>
         <div class="mod"><div class="fn">cli<span class="py">.py</span></div><p>argparse CLI, çıkış kodları, yönlendirme</p></div>
       </div>
     </div>
@@ -368,7 +378,7 @@ footer .mono{color:var(--faint)}
     <span class="eyebrow">Test &amp; teknoloji</span>
     <h2>Doğrulama ve yığın</h2>
     <div class="grid2">
-      <div class="card"><span class="k">114 test · ~1.300 satır</span><h3>Gerçek binary'lere karşı</h3>
+      <div class="card"><span class="k">163 test · ~1.900 satır</span><h3>Gerçek binary'lere karşı</h3>
         <p>Birim testleri her analizciyi sentetik girdilerle izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları, ekilmiş entropi adaları). Entegrasyon paketi tüm boru hattını <span class="mono">notepad.exe</span>, <span class="mono">kernel32.dll</span>, <span class="mono">mmc.exe</span>'ye karşı çalıştırır ve stok binary'lerin asla HIGH_RISK almadığını doğrular. Ağ kodu enjekte HTTP mock'larıyla test edilir — gerçek dış çağrı yok.</p></div>
       <div class="card"><span class="k">Yığın</span><h3>Ağır bağımlılık yok</h3>
         <p class="stack"><b>Python 3.12</b> · <b>pefile</b> — PE parse<br>

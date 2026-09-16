@@ -7,8 +7,8 @@ sky. The package and command are the ASCII `gokdogan`.
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-- **~3,300 lines** of Python across 21 focused modules
-- **~1,300 lines** of tests · **114 tests** · real-binary integration suite
+- **~4,500 lines** of Python across 31 focused modules
+- **~1,900 lines** of tests · **163 tests** · real-binary integration suite
 - Hard deps: `pefile`, `ppdeep` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
@@ -61,7 +61,7 @@ fully decoupled.
 
 ---
 
-## 3. Module map (21 modules, by layer)
+## 3. Module map (31 modules, by layer)
 
 **Core**
 - [`engine.py`](gokdogan/engine.py) — orchestrator; the entire `triage()` pipeline
@@ -71,16 +71,24 @@ fully decoupled.
 **Identity & clustering**
 - [`fuzzy.py`](gokdogan/fuzzy.py) — ssdeep + optional TLSH; `--compare` similarity
 - [`rich.py`](gokdogan/rich.py) — Rich header hash, `@comp.id` decode, checksum-tamper detection
+- [`hashes.py`](gokdogan/hashes.py) — authentihash (signature-independent) + impfuzzy import hash
+- [`cluster.py`](gokdogan/cluster.py) — `--cluster` union-find grouping of a dropzone
+- [`baseline.py`](gokdogan/baseline.py) — `--baseline` diff of a sample vs a known-good reference
 
 **Structure**
 - [`entropy.py`](gokdogan/entropy.py) — Shannon entropy + thresholds
 - [`packers.py`](gokdogan/packers.py) — known packer sections + structural heuristics
 - [`blobs.py`](gokdogan/blobs.py) — encrypted-config entropy islands
 - [`resources.py`](gokdogan/resources.py) — `.rsrc` walker: embedded PEs, high-entropy blobs
+- [`overlay.py`](gokdogan/overlay.py) — overlay content: magic-byte type, entropy, embedded PE
+- [`signature.py`](gokdogan/signature.py) — Authenticode verification (WinVerifyTrust) + cert names
+- [`dotnet.py`](gokdogan/dotnet.py) — managed/.NET CLR-header detection + obfuscator fingerprints
 
 **Content**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE extraction + IOC classification
 - [`decoded.py`](gokdogan/decoded.py) — FLOSS-lite: XOR/ADD/ROL/base64/hex string recovery
+- [`stackstrings.py`](gokdogan/stackstrings.py) — pattern-based x86 stack-string recovery (no emulator)
+- [`extractors.py`](gokdogan/extractors.py) — family config extraction (Discord/Telegram/stager URLs)
 
 **Behavior & intelligence**
 - [`exports.py`](gokdogan/exports.py) — export table + launch-mechanism detection
@@ -94,6 +102,8 @@ fully decoupled.
 - [`report.py`](gokdogan/report.py) — ANSI console + JSON
 - [`html_report.py`](gokdogan/html_report.py) — self-contained, escaped, theme-aware HTML
 - [`summary.py`](gokdogan/summary.py) — flat per-sample rows for batch CSV/JSONL
+- [`misp.py`](gokdogan/misp.py) — MISP event export for threat-intel sharing
+- [`web.py`](gokdogan/web.py) — optional FastAPI upload-and-triage service
 - [`cli.py`](gokdogan/cli.py) — argparse CLI, exit codes, output routing
 
 ---
@@ -172,7 +182,7 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**114 tests / ~1,300 lines.** Unit tests cover each analyzer in isolation with
+**163 tests / ~1,900 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
 entropy islands). The integration suite runs the full pipeline against real
 system binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe`) and asserts that
