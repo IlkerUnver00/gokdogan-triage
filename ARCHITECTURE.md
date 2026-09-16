@@ -32,6 +32,11 @@ fast, and trustworthy for an analyst.
 
 ## 2. Pipeline
 
+<p align="center">
+  <img src="assets/pipeline.png" width="880"
+       alt="gokdogan static pipeline: a sample flows through the triage stages to a transparent weighted verdict and multiple output formats">
+</p>
+
 ```
                           ┌──────────────────────────────────────────────┐
    sample.exe  ─────────▶ │                 engine.triage()              │
@@ -110,6 +115,11 @@ fully decoupled.
 
 ## 4. Analysis surface
 
+<p align="center">
+  <img src="assets/analysis-layers.png" width="980"
+       alt="gokdogan analysis surface: five layers — identity, structure, content, behavior, intelligence — and the modules that feed each">
+</p>
+
 | Axis | Signals |
 |---|---|
 | **Identity / clustering** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
@@ -159,6 +169,11 @@ the CLI layer so the `triage()` engine stays provably offline.
 ---
 
 ## 6. Verdict model
+
+<p align="center">
+  <img src="assets/verdict-model.png" width="860"
+       alt="gokdogan verdict model: the LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spectrum with thresholds and representative additive weights">
+</p>
 
 Scoring is deliberately transparent and additive. Representative weights:
 

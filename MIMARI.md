@@ -34,6 +34,11 @@ etrafında düzenlendi.
 
 ## 2. Boru hattı
 
+<p align="center">
+  <img src="assets/pipeline-tr.png" width="880"
+       alt="gokdogan statik boru hattı: bir örnek triyaj aşamalarından geçerek şeffaf ağırlıklı bir verdikte ve çeşitli çıktı formatlarına ulaşır">
+</p>
+
 ```
                           ┌──────────────────────────────────────────────┐
    sample.exe  ─────────▶ │                 engine.triage()              │
@@ -111,6 +116,11 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 
 ## 4. Analiz yüzeyi
 
+<p align="center">
+  <img src="assets/analysis-layers-tr.png" width="900"
+       alt="gokdogan analiz yüzeyi: beş katman — kimlik, yapı, içerik, davranış, istihbarat — ve her birini besleyen modüller">
+</p>
+
 | Eksen | Sinyaller |
 |---|---|
 | **Kimlik / kümeleme** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
@@ -161,6 +171,11 @@ Varsayılan kapalıdır, yalnızca SHA-256 gönderir (asla dosya), anahtarsız
 ---
 
 ## 6. Verdikt modeli
+
+<p align="center">
+  <img src="assets/verdict-model-tr.png" width="860"
+       alt="gokdogan verdikt modeli: LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spektrumu, eşikler ve temsili toplamsal ağırlıklar">
+</p>
 
 Skorlama bilinçli olarak şeffaf ve toplamsaldır. Temsili ağırlıklar:
 

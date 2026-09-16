@@ -81,6 +81,15 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Reporting** | ANSI console, JSON, **self-contained HTML** (verdict rationale embedded), CSV/JSONL batch, ATT&CK Navigator layer, **MISP event** | one engine, many outputs — terminal for triage, HTML for the case file, CSV for the dropzone, JSON for the pipeline, MISP for threat-intel sharing |
 | **Reputation** (opt-in) | VirusTotal + MalwareBazaar **hash-only** lookup, off by default | "is this already known?" without uploading the sample — only the SHA-256 leaves, and only when you pass `--reputation` with a key |
 
+<p align="center">
+  <img src="assets/pipeline.png" width="860"
+       alt="gokdogan static pipeline: a sample flows through the triage stages to a transparent weighted verdict and multiple output formats">
+</p>
+
+*The full pipeline — plus the [analysis surface](assets/analysis-layers.png) and
+[verdict model](assets/verdict-model.png) diagrams — is walked through in
+[ARCHITECTURE.md](ARCHITECTURE.md) (English) · [MIMARI.md](MIMARI.md) (Türkçe).*
+
 ## Install
 
 ### On any Windows PC — no Python needed
