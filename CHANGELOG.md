@@ -4,7 +4,7 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.5.2] — Unreleased
+## [0.5.2] — 2026-09-24
 
 Credibility pass: correctness fixes an expert reviewer would catch, hardening
 against inputs an attacker controls, and an honest account of what the tool
@@ -133,5 +133,6 @@ distribution. Consolidates all prior feature work into one shippable tool.
   weighted verdict (`LIKELY_CLEAN` / `SUSPICIOUS` / `HIGH_RISK`) where every
   point carries a printed reason.
 
+[0.5.2]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.2
 [0.5.1]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.1
 [0.5.0]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.0
