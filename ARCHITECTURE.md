@@ -7,8 +7,8 @@ sky. The package and command are the ASCII `gokdogan`.
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-- **~4,500 lines** of Python across 31 focused modules
-- **~1,900 lines** of tests · **173 tests** · real-binary integration suite
+- **~4,900 lines** of Python across 31 focused modules
+- **~2,400 lines** of tests · **207 tests** · real-binary integration suite
 - Hard deps: `pefile`, `ppdeep` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
@@ -175,7 +175,8 @@ the CLI layer so the `triage()` engine stays provably offline.
        alt="gokdogan verdict model: the LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spectrum with thresholds and representative additive weights">
 </p>
 
-Scoring is deliberately transparent and additive. Representative weights:
+Scoring is deliberately transparent and additive, with two guard rails in the
+last rows below. Representative weights:
 
 | Signal | Points |
 |---|---|
@@ -185,7 +186,9 @@ Scoring is deliberately transparent and additive. Representative weights:
 | Capability (severity 1 / 2 / 3) | +2 / +8 / +18 |
 | YARA match | rule `meta.weight`, default +15 |
 | Encoded IOC/payload recovered | up to +24 |
-| Embedded Authenticode signature (unverified) | −8 |
+| Valid Authenticode signature | −15, or 0 if the certificate table carries unauthenticated data |
+| Signature present but not valid (self-signed, expired, unverified) | 0 |
+| Packing signals together (packer, entropy, packer YARA, stub anomalies) | capped at 30 |
 
 Thresholds: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. The full breakdown is
 printed in every report — the analyst can see exactly why a sample scored the
@@ -197,21 +200,26 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**173 tests / ~1,900 lines.** Unit tests cover each analyzer in isolation with
+**207 tests / ~2,400 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
-entropy islands). The integration suite runs the full pipeline against real
-system binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe`) and asserts that
-stock Microsoft binaries never score `HIGH_RISK` and never trip the
-dropper / embedded-config / phantom-string false positives. Network code is
-tested with injected HTTP mocks — no real external calls.
+entropy islands, synthetic certificate tables). The integration suite runs the full pipeline against real system binaries
+(`notepad.exe`, `kernel32.dll`) and asserts they never score `HIGH_RISK`
+and never trip the dropper / embedded-config / phantom-string false
+positives. Two known false positives are kept visible as `xfail`
+tests: a stock `mmc.exe` and a validly signed `chrome.exe` both score
+`HIGH_RISK`, because large legitimate programs import enough APIs for
+several capability rules to stack. That is a calibration problem for a
+measured benchmark, not something to hand-tune against two files. Network
+code is tested with injected HTTP mocks — no real external calls.
 
 ---
 
 ## 8. Tech stack
 
-Python 3.12 · `pefile` (PE parsing) · `ppdeep` (pure-Python ssdeep) ·
+Python 3.10+ · `pefile` (PE parsing) · `ppdeep` (pure-Python ssdeep) ·
 optional `yara-python`, `py-tlsh` · standard-library `urllib` for reputation.
-No web framework, no heavyweight dependencies — a self-contained CLI that
+No web framework in the core (the upload service is an optional FastAPI extra),
+no heavyweight dependencies — a self-contained CLI that
 drops into a malware-lab workflow.
 
 ---

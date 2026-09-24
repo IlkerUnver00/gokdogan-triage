@@ -8,8 +8,8 @@
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
-- 31 odaklı modülde **~4.500 satır** Python
-- **~1.900 satır** test · **173 test** · gerçek binary entegrasyon paketi
+- 31 odaklı modülde **~4.900 satır** Python
+- **~2.400 satır** test · **207 test** · gerçek binary entegrasyon paketi
 - Zorunlu bağımlılık: `pefile`, `ppdeep` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için
@@ -177,7 +177,8 @@ Varsayılan kapalıdır, yalnızca SHA-256 gönderir (asla dosya), anahtarsız
        alt="gokdogan verdikt modeli: LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spektrumu, eşikler ve temsili toplamsal ağırlıklar">
 </p>
 
-Skorlama bilinçli olarak şeffaf ve toplamsaldır. Temsili ağırlıklar:
+Skorlama bilinçli olarak şeffaf ve toplamsaldır; tablonun son satırları iki
+korkuluğu gösterir. Temsili ağırlıklar:
 
 | Sinyal | Puan |
 |---|---|
@@ -187,7 +188,9 @@ Skorlama bilinçli olarak şeffaf ve toplamsaldır. Temsili ağırlıklar:
 | Capability (şiddet 1 / 2 / 3) | +2 / +8 / +18 |
 | YARA eşleşmesi | kural `meta.weight`, varsayılan +15 |
 | Kurtarılmış kodlu IOC/payload | +24'e kadar |
-| Gömülü Authenticode imzası (doğrulanmamış) | −8 |
+| Geçerli Authenticode imzası | −15; sertifika tablosunda doğrulanmamış veri varsa 0 |
+| İmza var ama geçerli değil (self-signed, süresi dolmuş, doğrulanmamış) | 0 |
+| Paketleme sinyalleri birlikte (packer, entropi, packer YARA, stub anomalileri) | en fazla 30 |
 
 Eşikler: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. Tam döküm her raporda
 basılır — analist bir örneğin neden o skoru aldığını tam olarak görür ve YARA
@@ -199,19 +202,24 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**173 test / ~1.900 satır.** Birim testleri her analizciyi sentetik girdilerle
+**207 test / ~2.400 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
-ekilmiş entropi adaları). Entegrasyon paketi tüm boru hattını gerçek sistem
-binary'lerine (`notepad.exe`, `kernel32.dll`, `mmc.exe`) karşı çalıştırır ve
-stok Microsoft binary'lerinin asla `HIGH_RISK` almadığını, dropper /
-gömülü-config / hayali-string yanlış-pozitiflerine takılmadığını doğrular. Ağ
-kodu enjekte HTTP mock'larıyla test edilir — gerçek dış çağrı yoktur.
+ekilmiş entropi adaları, sentetik sertifika tabloları). Entegrasyon paketi tüm
+boru hattını gerçek sistem binary'lerine (`notepad.exe`, `kernel32.dll`) karşı
+çalıştırır ve bunların asla `HIGH_RISK` almadığını, dropper / gömülü-config /
+hayali-string yanlış-pozitiflerine takılmadığını doğrular. Bilinen iki yanlış
+pozitif bilerek görünür tutulur (`xfail` testleri): stok `mmc.exe` ve
+geçerli imzalı `chrome.exe` `HIGH_RISK` çıkar; çünkü büyük meşru programlar,
+birkaç yetenek kuralının üst üste binmesine yetecek kadar API içe aktarır. Bu,
+iki dosyaya göre elle ayarlanacak bir şey değil, ölçülmüş bir benchmark'la
+çözülecek bir kalibrasyon sorunudur. Ağ kodu enjekte HTTP mock'larıyla test
+edilir — gerçek dış çağrı yoktur.
 
 ---
 
 ## 8. Teknoloji yığını
 
-Python 3.12 · `pefile` (PE parse) · `ppdeep` (saf-Python ssdeep) · opsiyonel
+Python 3.10+ · `pefile` (PE parse) · `ppdeep` (saf-Python ssdeep) · opsiyonel
 `yara-python`, `py-tlsh` · reputation için standart kütüphane `urllib`. Web
 framework yok, ağır bağımlılık yok — malware-lab akışına giren, kendi kendine
 yeten bir CLI.
