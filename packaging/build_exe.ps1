@@ -15,7 +15,7 @@ Set-Location (Join-Path $PSScriptRoot "..")
 # The import graph from entry.py -> gokdogan.cli pulls in every analyzer, so
 # no --collect-submodules is needed; excluding the optional web stack keeps
 # fastapi/uvicorn (which the CLI never imports) out of the binary.
-pyinstaller --noconfirm --clean --onefile --console --name gokdogan `
+pyinstaller --noconfirm --clean --onefile --console --noupx --name gokdogan `
     --paths . `
     --add-data "gokdogan/rules;gokdogan/rules" `
     --hidden-import yara `
