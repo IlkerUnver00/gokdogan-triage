@@ -58,6 +58,7 @@ class OverlayInfo:
     type_guess: str      # magic-byte file-type label, or "unknown"
     contains_pe: bool
     is_signature: bool   # overlay is (just) the Authenticode blob
+    cert_padding: int = 0  # bytes hidden in the certificate table after the PKCS#7 blob
 
 
 @dataclass

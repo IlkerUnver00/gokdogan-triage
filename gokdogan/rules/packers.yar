@@ -1,5 +1,6 @@
 // Packer / protector detection rules.
-// meta.weight feeds the verdict engine directly (see verdict.py).
+// meta.weight feeds the verdict engine directly (see verdict.py). Tag packer
+// rules `packer` so the verdict caps them together with the other packing signals.
 
 rule UPX_Packed : packer
 {

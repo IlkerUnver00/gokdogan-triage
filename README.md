@@ -3,7 +3,7 @@
 [![tests](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/IlkerUnver00/gokdogan-triage/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/IlkerUnver00/gokdogan-triage?label=release)](https://github.com/IlkerUnver00/gokdogan-triage/releases)
 [![PyPI](https://img.shields.io/pypi/v/gokdogan-triage?label=pypi)](https://pypi.org/project/gokdogan-triage/)
-[![python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![ruff](https://img.shields.io/badge/lint-ruff-orange)](https://docs.astral.sh/ruff/)
 [![license](https://img.shields.io/badge/license-MIT-green)](#license)
 
@@ -107,7 +107,7 @@ attaches both to a GitHub Release automatically.
 
 ### From PyPI
 
-If you already have Python 3.12+, install the published package:
+If you already have Python 3.10+, install the published package:
 
 ```bash
 pip install gokdogan-triage
@@ -357,17 +357,60 @@ gokdogan/
   - [x] pluggable family config extractors (Discord/Telegram/stager URLs)
   - [x] FastAPI upload-and-triage service; wheel-packaged rules + Dockerfile
 
+## What gokdogan does not do
+
+gokdogan is a fast first-pass triage layer. It does not replace the tools
+analysts already rely on, and its edges are worth stating plainly:
+
+- **Static only.** It never runs the sample, so anything visible only at
+  runtime (unpacked payloads, decrypted configs, network behaviour) is out of
+  reach. Packing signals are capped at the `SUSPICIOUS` threshold, so packing
+  alone can raise a sample to `SUSPICIOUS` at most, never to `HIGH_RISK`; what
+  the packed payload does is not analysed. For behaviour, use a sandbox such
+  as CAPE.
+- **Not capa.** Capabilities come from import-table and string evidence with
+  minimum hit counts, not from capa's rule engine over disassembled code. capa
+  sees far more: function-level features, .NET metadata, sandbox reports.
+- **Not FLOSS.** Encoded-string recovery covers single-byte XOR/ADD/ROL,
+  Base64/hex and simple stack strings. It does not emulate decoding routines
+  the way FLOSS does.
+- **Not Detect It Easy or PEStudio.** Packer and compiler identification is
+  shallower than DIE's signature database, and PEStudio shows more indicators
+  interactively.
+- **.NET is a blind spot.** Managed assemblies and common obfuscators are
+  detected, but import-based capability analysis sees nothing inside managed
+  code.
+- **Accuracy is not measured yet.** Weights and thresholds are hand-set and
+  checked against clean system binaries; recall and precision on real malware
+  have not been measured. Two known false positives are kept visible in the
+  test suite: a stock `mmc.exe` and a validly signed `chrome.exe` both score
+  `HIGH_RISK`. Treat the verdict as a prioritisation signal.
+- **Signature verification is Windows-only.** Elsewhere the Authenticode
+  status is `unavailable`, so the same file can score differently.
+- **Certificate-table checks are deliberately strict.** Anything in the
+  Authenticode certificate table beyond the signature itself (16 bytes or
+  more) is reported and cancels the signature credit, including a second,
+  non-signature entry a vendor put there on purpose. One legitimate forensics
+  DLL tested carries 512 such bytes. Data hidden inside the signature's own
+  unauthenticated attributes is not inspected.
+- **Not a platform.** For queues, dozens of file formats and multi-engine
+  pipelines, use AssemblyLine, Strelka or Karton/MWDB. gokdogan is one CLI.
+
 ## Testing
 
 ```bash
 pytest -v
 ```
 
-Over 100 tests: unit tests cover each analyzer in isolation with synthetic
-inputs, while the integration suite runs the full pipeline against real
-system binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe`) and asserts that
-stock Microsoft binaries never score `HIGH_RISK` and never trip the
-dropper / embedded-config / phantom-string false positives.
+207 tests: unit tests cover each analyzer in isolation with synthetic
+inputs. The integration suite runs the full pipeline against real system binaries
+(`notepad.exe`, `kernel32.dll`) and asserts they never score `HIGH_RISK`
+and never trip the dropper / embedded-config / phantom-string false
+positives. Two known false positives are kept visible as `xfail`
+tests: a stock `mmc.exe` and a validly signed `chrome.exe` both score
+`HIGH_RISK`, because large legitimate programs import enough APIs for
+several capability rules to stack. That is a calibration problem for a
+measured benchmark, not something to hand-tune against two files.
 
 ## License
 

@@ -65,3 +65,18 @@ def test_misp_json_is_valid():
     text = render_misp(_report())
     parsed = json.loads(text)
     assert "Event" in parsed
+
+
+def test_to_ids_follows_how_the_indicator_was_found():
+    attrs = to_misp_event(_report())["Event"]["Attribute"]
+    to_ids = {(a["type"], a["value"]): a["to_ids"] for a in attrs}
+    f = _report().file
+    for atype, value in (("md5", f.md5), ("sha1", f.sha1), ("sha256", f.sha256)):
+        assert to_ids[(atype, value)] is True
+    # the authentihash equals the vendor file's for a padded-certificate sample
+    assert to_ids[("authentihash", f.authentihash)] is False
+    assert to_ids[("filename", "evil.exe")] is False
+    # plaintext strings are context; a URL the malware XOR-hid is an IOC
+    assert to_ids[("url", "http://evil.example/gate")] is False
+    assert to_ids[("ip-dst", "203.0.113.9")] is False
+    assert to_ids[("url", "http://c2.hidden/x")] is True
