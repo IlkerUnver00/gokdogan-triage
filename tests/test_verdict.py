@@ -1,13 +1,15 @@
+from gokdogan.loader import is_packing_anomaly
 from gokdogan.models import (
     Capability,
     FileInfo,
+    OverlayInfo,
     PackerInfo,
     SignatureInfo,
     TriageReport,
     Verdict,
     YaraHit,
 )
-from gokdogan.verdict import SUSPICIOUS_THRESHOLD, score_report
+from gokdogan.verdict import HIGH_RISK_THRESHOLD, SUSPICIOUS_THRESHOLD, score_report
 
 
 def _file_info(**overrides):
@@ -74,13 +76,33 @@ def _suspicious_caps():
             Capability("screen-capture", "grabs", 2, ["BitBlt", "GetDC", "GetDIBits"])]
 
 
-def test_unverified_signature_mitigates_by_8():
+def test_signature_that_is_not_valid_earns_no_credit():
+    # Anyone can self-sign, and an expired or unverified blob proves nothing.
+    base = TriageReport(file=_file_info(), capabilities=_suspicious_caps())
+    score_report(base)
+    for status in ("expired", "untrusted", "unverified", "invalid"):
+        signed = TriageReport(file=_file_info(is_signed=True), capabilities=_suspicious_caps(),
+                              signature=SignatureInfo(status=status, present=True))
+        score_report(signed)
+        assert signed.score == base.score, status
+        assert any(e.points == 0 and "no mitigation credit" in e.reason
+                   for e in signed.score_breakdown), status
+
+
+def test_valid_signature_over_padded_cert_table_earns_no_credit():
+    # CVE-2013-3900: data hidden after the PKCS#7 blob keeps the signature
+    # "valid"; the credit must not apply (the 3CX DLL pattern).
+    padded = OverlayInfo(offset=1000, size=14000, pct=10.0, entropy=7.9, type_guess="unknown",
+                         contains_pe=False, is_signature=True, cert_padding=4096)
     base = TriageReport(file=_file_info(), capabilities=_suspicious_caps())
     signed = TriageReport(file=_file_info(is_signed=True), capabilities=_suspicious_caps(),
-                          signature=SignatureInfo(status="expired", present=True))
+                          overlay=padded,
+                          signature=SignatureInfo(status="valid", present=True, verified=True,
+                                                  signer="Contoso Ltd"))
     score_report(base)
     score_report(signed)
-    assert signed.score == base.score - 8
+    assert signed.score == base.score
+    assert not any(e.points < 0 for e in signed.score_breakdown)
 
 
 def test_valid_signature_mitigates_more():
@@ -152,3 +174,77 @@ def test_valid_signature_still_clears_benign():
     )
     score_report(report)
     assert report.verdict == Verdict.LIKELY_CLEAN
+
+
+def _packed_report(**overrides):
+    # A UPX-style file: every signal below says "packed", none says "malicious".
+    fields = dict(
+        file=_file_info(),
+        packer=PackerInfo(detected=True, names=["UPX"]),
+        overall_entropy=7.6,
+        anomalies=["section 'UPX0': W+X", "section 'UPX0': zero raw size (unpacking target)",
+                   "section 'UPX1': W+X", "section 'UPX1': high-entropy executable section"],
+        yara=[YaraHit(rule="UPX_Packed", tags=["packer"], meta={"weight": 12})],
+    )
+    fields.update(overrides)
+    return TriageReport(**fields)
+
+
+def test_packing_alone_is_capped_below_high_risk():
+    report = _packed_report()
+    score_report(report)
+    assert report.score == SUSPICIOUS_THRESHOLD
+    assert report.verdict == Verdict.SUSPICIOUS
+    assert any(e.reason.startswith("cap: packing") for e in report.score_breakdown)
+
+
+def test_packing_cap_leaves_behavioural_evidence_alone():
+    report = _packed_report(capabilities=[Capability("process-injection", "", 3, [])],
+                            anomalies=["section 'UPX0': W+X", "TLS callbacks present"])
+    score_report(report)
+    # packing group 15+10+6+12 = 43 -> capped at 30; injection 18 and the TLS
+    # anomaly 6 are not packing signals and still count in full.
+    assert report.score == SUSPICIOUS_THRESHOLD + 18 + 6
+    assert report.score < HIGH_RISK_THRESHOLD
+
+
+def test_packing_under_the_cap_is_untouched():
+    report = TriageReport(file=_file_info(), packer=PackerInfo(detected=True, names=["UPX"]))
+    score_report(report)
+    assert report.score == 15
+    assert not any(e.reason.startswith("cap:") for e in report.score_breakdown)
+
+
+def test_stray_cert_bytes_below_threshold_keep_the_credit():
+    stray = OverlayInfo(offset=1000, size=10000, pct=5.0, entropy=7.0, type_guess="unknown",
+                        contains_pe=False, is_signature=True, cert_padding=1)
+    base = TriageReport(file=_file_info(), capabilities=_suspicious_caps())
+    signed = TriageReport(file=_file_info(is_signed=True), capabilities=_suspicious_caps(),
+                          overlay=stray,
+                          signature=SignatureInfo(status="valid", present=True, verified=True,
+                                                  signer="Contoso Ltd"))
+    score_report(base)
+    score_report(signed)
+    assert signed.score == base.score - 15
+
+
+def test_packing_anomalies_are_matched_by_prefix_not_substring():
+    assert is_packing_anomaly("section 'UPX0': W+X")
+    assert is_packing_anomaly("no import table")
+    assert is_packing_anomaly("only 3 imported functions (likely resolved at runtime)")
+    assert is_packing_anomaly("entry point in last section 'UPX1'")
+    # resource names and types are attacker-controlled free text
+    assert not is_packing_anomaly("resource RCDATA/a: W+X: embedded PE executable")
+    assert not is_packing_anomaly("resource no import table/x: high entropy")
+    assert not is_packing_anomaly("TLS callbacks present (code runs before entry point)")
+
+
+def test_attacker_named_resource_is_not_swallowed_by_the_packing_cap():
+    report = _packed_report(anomalies=[
+        "section 'UPX0': W+X", "section 'UPX0': zero raw size (unpacking target)",
+        "section 'UPX1': W+X", "section 'UPX1': high-entropy executable section",
+        "resource RCDATA/a: W+X: embedded PE executable (12288 bytes)",
+    ])
+    score_report(report)
+    # packing 61 is capped at 30; the dropper anomaly still counts in full
+    assert report.score == SUSPICIOUS_THRESHOLD + 6

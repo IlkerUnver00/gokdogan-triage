@@ -17,8 +17,29 @@ def test_rotl32_wraps():
 
 
 def test_prodid_name_known_and_fallback():
-    assert "linker" in _prodid_name(0x5D).lower()
+    assert _prodid_name(0x5A) == "Linker710 (VS2003)"
+    assert _prodid_name(0x5D) == "Implib710 (VS2003)"   # an import library, not a linker
     assert _prodid_name(0x1234) == "prodid 0x1234"
+
+
+def test_prodid_names_match_known_toolchains():
+    # Spot checks against the documented prodid enum, including the VS2015+
+    # ids every modern MSVC binary carries.
+    assert _prodid_name(0x91) == "Linker900 (VS2008)"
+    assert _prodid_name(0x93) == "Implib900 (VS2008)"
+    assert _prodid_name(0xAB) == "Utc1600_CPP (VS2010)"
+    assert _prodid_name(0xD3) == "Utc1700_LTCG_CPP (VS2012)"
+    assert _prodid_name(0xE1) == "Utc1800_CPP (VS2013)"
+    assert _prodid_name(0xE3) == "Utc1800_CVTCIL_CPP (VS2013)"
+    assert _prodid_name(0x102) == "Linker1400 (VS2015+)"
+    assert _prodid_name(0x104) == "Utc1900_C (VS2015+)"
+    assert _prodid_name(0x105) == "Utc1900_CPP (VS2015+)"
+    assert _prodid_name(0x10E) == "Utc1900_POGO_O_CPP (VS2015+)"
+
+
+def test_prodid_table_is_contiguous():
+    from gokdogan.rich import _PRODID_NAMES
+    assert sorted(_PRODID_NAMES) == list(range(0x10F))
 
 
 class _FakePE:

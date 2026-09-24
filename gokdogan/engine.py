@@ -20,6 +20,7 @@ from .loader import (
     delay_imported_functions,
     find_anomalies,
     imported_functions,
+    is_managed,
     load_pe,
 )
 from .models import SignatureInfo, TriageReport
@@ -59,6 +60,7 @@ def triage(
         exports = parse_exports(pe, Path(path).name)
         file_info.impfuzzy = impfuzzy(imports)
         stack_strings = recover_stackstrings(pe)
+        managed = is_managed(pe)
     finally:
         pe.close()
 
@@ -87,7 +89,7 @@ def triage(
         merged_imports.setdefault(dll, []).extend(names)
 
     import_count = sum(len(v) for v in merged_imports.values())
-    packer = detect_packer(sections, import_count)
+    packer = detect_packer(sections, import_count, is_dotnet=managed)
     string_hits, string_stats = analyze_strings(data, min_string_length)
     decoded_strings = recover_encoded_strings(data) + stack_strings
     config_extractions = extract_config(data, [d.value for d in decoded_strings])

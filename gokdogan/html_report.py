@@ -79,7 +79,7 @@ def _signature_html(report: TriageReport) -> str:
     signer = f" — {_esc(sig.signer)}" if sig.signer else ""
     good = sig.status == "valid"
     bad = sig.status in ("tampered", "revoked")
-    color = "var(--clean)" if good else ("var(--risk)" if bad else "var(--suspicious)")
+    color = "var(--clean)" if good else ("var(--high)" if bad else "var(--suspicious)")
     label = sig.status.upper() if bad else sig.status
     return (f'<b style="color:{color}">{_esc(label)}</b>{signer}'
             f'<span class="muted"> — {_esc(sig.note)}</span>')

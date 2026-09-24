@@ -7,10 +7,20 @@ an analyst can't argue with is a triage tool nobody trusts.
 
 from __future__ import annotations
 
+from .entropy import HIGH_ENTROPY_FILE
+from .loader import is_packing_anomaly
 from .models import ScoreEntry, TriageReport, Verdict
+from .overlay import MIN_HIDDEN_BYTES
 
 SUSPICIOUS_THRESHOLD = 30
 HIGH_RISK_THRESHOLD = 60
+
+# Packer name, high entropy, packer YARA rules and the section/import
+# anomalies an unpacking stub leaves are one fact seen several ways. Summing
+# them let a plain UPX-packed utility reach HIGH_RISK with no behavioural
+# evidence at all, so the group is capped: packing alone routes a sample to
+# SUSPICIOUS (look closer or detonate it), never to HIGH_RISK.
+_PACKING_CAP = SUSPICIOUS_THRESHOLD
 
 # Capability severity -> points per capability.
 _CAP_POINTS = {1: 2, 2: 8, 3: 18}
@@ -22,16 +32,22 @@ _YARA_DEFAULT_POINTS = 15
 def score_report(report: TriageReport) -> None:
     """Fill report.score, report.score_breakdown and report.verdict in place."""
     entries: list[ScoreEntry] = []
+    packing: list[ScoreEntry] = []
+
+    def add(entry: ScoreEntry, is_packing: bool = False) -> None:
+        entries.append(entry)
+        if is_packing:
+            packing.append(entry)
 
     if report.packer.detected:
         names = ", ".join(report.packer.names) or "unknown"
-        entries.append(ScoreEntry(15, f"packer detected: {names}"))
+        add(ScoreEntry(15, f"packer detected: {names}"), is_packing=True)
 
-    if report.overall_entropy >= 7.0:
-        entries.append(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}"))
+    if report.overall_entropy >= HIGH_ENTROPY_FILE:
+        add(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}"), is_packing=True)
 
     for anomaly in report.anomalies:
-        entries.append(ScoreEntry(6, f"anomaly: {anomaly}"))
+        add(ScoreEntry(6, f"anomaly: {anomaly}"), is_packing=is_packing_anomaly(anomaly))
 
     if report.file.compile_timestamp_anomaly:
         entries.append(ScoreEntry(5, report.file.compile_timestamp_anomaly))
@@ -45,7 +61,7 @@ def score_report(report: TriageReport) -> None:
         points = hit.meta.get("weight", _YARA_DEFAULT_POINTS)
         if not isinstance(points, int):
             points = _YARA_DEFAULT_POINTS
-        entries.append(ScoreEntry(points, f"YARA match: {hit.rule}"))
+        add(ScoreEntry(points, f"YARA match: {hit.rule}"), is_packing="packer" in hit.tags)
 
     ioc_count = sum(
         report.string_stats.get(k, 0) for k in ("url", "ipv4", "domain")
@@ -74,9 +90,11 @@ def score_report(report: TriageReport) -> None:
         entries.append(ScoreEntry(min(15 * len(families), 30),
                                   f"extracted config: {', '.join(families)}"))
 
-    # Authenticode: a *verified* signature is a real mitigation; a tampered
-    # or revoked one is damning; a present-but-unverified blob is a weak
-    # mitigation (unsigned + suspicious is the more common malware shape).
+    packed_points = sum(e.points for e in packing)
+    if packed_points > _PACKING_CAP:
+        entries.append(ScoreEntry(_PACKING_CAP - packed_points,
+                                  f"cap: packing signals are one fact, capped at {_PACKING_CAP}"))
+
     # Online reputation (opt-in, attached by the CLI): the wider world's verdict.
     rep_points, rep_reasons = 0, []
     for rep in report.reputation:
@@ -99,10 +117,20 @@ def score_report(report: TriageReport) -> None:
     if rep_points:
         entries.append(ScoreEntry(min(rep_points, 35), "reputation: " + ", ".join(rep_reasons)))
 
+    # Authenticode: only a *verified* signature is a mitigation. A tampered or
+    # revoked one is damning. A signature that is present but not valid
+    # (self-signed, expired, unverified) earns nothing: anyone can self-sign.
+    # A valid signature over a certificate table that hides extra data earns
+    # nothing either: that is exactly how the 3CX DLL stayed "signed".
     sig = report.signature
     sig_valid = sig is not None and sig.status == "valid"
+    padded = report.overlay is not None and report.overlay.cert_padding >= MIN_HIDDEN_BYTES
     if sig is not None:
-        if sig_valid and entries:
+        if sig_valid and padded:
+            entries.append(ScoreEntry(0, "Authenticode signature valid but the certificate "
+                                         "table carries unauthenticated data — no mitigation "
+                                         "credit"))
+        elif sig_valid and entries:
             # A verified signature is a real mitigation. It is intentionally a
             # flat credit that at most downgrades a sample one tier (it can never
             # bridge the 30-point gap from HIGH_RISK to LIKELY_CLEAN), and a floor
@@ -113,7 +141,8 @@ def score_report(report: TriageReport) -> None:
         elif sig.status == "revoked":
             entries.append(ScoreEntry(15, "Authenticode signing certificate revoked"))
         elif sig.present and entries:
-            entries.append(ScoreEntry(-8, f"Authenticode signature present but {sig.status}"))
+            entries.append(ScoreEntry(0, f"Authenticode signature present but {sig.status}"
+                                         " — no mitigation credit"))
 
     report.score_breakdown = entries
     report.score = max(0, sum(e.points for e in entries))

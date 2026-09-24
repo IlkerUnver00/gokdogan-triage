@@ -9,6 +9,7 @@ Two complementary signals:
 from __future__ import annotations
 
 from .entropy import HIGH_ENTROPY
+from .loader import FLAG_UNPACK_TARGET
 from .models import PackerInfo, SectionInfo
 
 # Section name (lowercase, exact) -> packer/protector family.
@@ -60,7 +61,8 @@ KNOWN_PACKER_SECTIONS: dict[str, str] = {
 }
 
 
-def detect_packer(sections: list[SectionInfo], import_count: int) -> PackerInfo:
+def detect_packer(sections: list[SectionInfo], import_count: int,
+                  is_dotnet: bool = False) -> PackerInfo:
     names: list[str] = []
     indicators: list[str] = []
 
@@ -77,16 +79,18 @@ def detect_packer(sections: list[SectionInfo], import_count: int) -> PackerInfo:
             f"executable section {s.name!r} has entropy {s.entropy:.2f} (>= {HIGH_ENTROPY})"
         )
 
-    unpack_targets = [s for s in sections if "zero raw size (unpacking target)" in s.flags]
+    unpack_targets = [s for s in sections if FLAG_UNPACK_TARGET in s.flags]
     for s in unpack_targets:
         indicators.append(f"section {s.name!r} is empty on disk but mapped in memory")
 
-    if import_count <= 10:
+    # A managed assembly imports only the CLR bootstrap; that is not a tell.
+    tiny_imports = import_count <= 10 and not is_dotnet
+    if tiny_imports:
         indicators.append(f"tiny import table ({import_count} functions)")
 
     # Generic verdict: heuristics fire together strongly enough even
     # without a recognizable section name.
-    heuristic_hits = bool(hot) + bool(unpack_targets) + (import_count <= 10)
+    heuristic_hits = bool(hot) + bool(unpack_targets) + tiny_imports
     detected = bool(names) or heuristic_hits >= 2
     if detected and not names:
         names.append("unknown packer (heuristic)")

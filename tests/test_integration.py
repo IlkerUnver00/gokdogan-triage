@@ -10,6 +10,8 @@ from gokdogan.report import render_json
 
 NOTEPAD = Path(r"C:\Windows\System32\notepad.exe")
 KERNEL32 = Path(r"C:\Windows\System32\kernel32.dll")
+MMC = Path(r"C:\Windows\System32\mmc.exe")
+CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 
 pytestmark = pytest.mark.skipif(not NOTEPAD.exists(), reason="notepad.exe not available")
 
@@ -84,3 +86,22 @@ def test_yara_disabled_still_reports():
     report = triage(NOTEPAD, use_yara=False)
     assert report.yara == []
     assert report.yara_error is None
+
+
+# Known false positives, kept visible on purpose. Large legitimate programs
+# import enough APIs for several capability rules to stack additively, so a
+# stock mmc.exe and a validly signed chrome.exe come out HIGH_RISK. That is a
+# calibration problem for the benchmark (roadmap Phase C) to measure and fix,
+# not something to hand-tune against two files. The markers are not strict:
+# the binaries differ between Windows builds (CI runs Windows Server), so an
+# XPASS there says nothing about calibration. Remove them once it lands.
+@pytest.mark.xfail(strict=False, reason="known FP: capability stacking on large benign programs")
+@pytest.mark.skipif(not MMC.exists(), reason="mmc.exe not available")
+def test_known_fp_mmc_is_not_high_risk():
+    assert triage(MMC).verdict.value != "HIGH_RISK"
+
+
+@pytest.mark.xfail(strict=False, reason="known FP: capability stacking on large benign programs")
+@pytest.mark.skipif(not CHROME.exists(), reason="chrome.exe not available")
+def test_known_fp_chrome_is_not_high_risk():
+    assert triage(CHROME).verdict.value != "HIGH_RISK"

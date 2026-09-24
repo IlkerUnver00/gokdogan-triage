@@ -39,10 +39,22 @@ class _UnionFind:
             self.parent[rb] = ra
 
 
+def _imports_informative(report) -> bool:
+    """A shared import table only means something when it is native and unpacked.
+
+    Every .NET assembly imports just mscoree!_CorExeMain, and packer stubs
+    import the same handful of loader APIs, so both their imphash and their
+    impfuzzy collide across unrelated files.
+    """
+    packer = getattr(report, "packer", None)
+    return getattr(report, "dotnet", None) is None and not getattr(packer, "detected", False)
+
+
 def _related(r1, r2) -> str | None:
     """Return the basis on which two reports relate, or None."""
     f1, f2 = r1.file, r2.file
-    if f1.imphash and f1.imphash == f2.imphash:
+    imports_informative = _imports_informative(r1) and _imports_informative(r2)
+    if imports_informative and f1.imphash and f1.imphash == f2.imphash:
         return "imphash"
     if r1.rich and r2.rich and r1.rich.hash == r2.rich.hash:
         return "rich_hash"
@@ -51,7 +63,7 @@ def _related(r1, r2) -> str | None:
     score = compare_ssdeep(f1.ssdeep, f2.ssdeep)
     if score is not None and score >= _FUZZY_THRESHOLD:
         return f"ssdeep~{score}"
-    imp = compare_ssdeep(f1.impfuzzy, f2.impfuzzy)
+    imp = compare_ssdeep(f1.impfuzzy, f2.impfuzzy) if imports_informative else None
     if imp is not None and imp >= _FUZZY_THRESHOLD:
         return f"impfuzzy~{imp}"
     return None
@@ -61,15 +73,20 @@ def cluster_reports(reports: list) -> list[Cluster]:
     """Group related reports; returns clusters of size >= 2, largest first."""
     n = len(reports)
     uf = _UnionFind(n)
-    bases: dict[int, set[str]] = {}
+    links: list[tuple[int, str]] = []
 
     for i in range(n):
         for j in range(i + 1, n):
             basis = _related(reports[i], reports[j])
             if basis is not None:
                 uf.union(i, j)
-                root = uf.find(i)
-                bases.setdefault(root, set()).add(basis.split("~")[0])
+                links.append((i, basis.split("~")[0]))
+
+    # Attribute each link's basis only once every union is done: roots move
+    # as clusters merge, so keying by the root at link time loses bases.
+    bases: dict[int, set[str]] = {}
+    for i, basis in links:
+        bases.setdefault(uf.find(i), set()).add(basis)
 
     groups: dict[int, list[int]] = {}
     for idx in range(n):

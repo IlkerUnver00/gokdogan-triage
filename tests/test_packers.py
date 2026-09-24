@@ -55,3 +55,11 @@ def test_high_entropy_alone_is_not_enough():
     result = detect_packer(sections, import_count=150)
     assert not result.detected
     assert result.indicators  # evidence is still reported
+
+
+def test_dotnet_tiny_import_table_is_not_a_packing_tell():
+    sections = [_section(".text", entropy=7.5)]      # one hot executable section
+    assert detect_packer(sections, import_count=1).detected          # hot + tiny
+    managed = detect_packer(sections, import_count=1, is_dotnet=True)
+    assert not managed.detected
+    assert not any("tiny import table" in i for i in managed.indicators)

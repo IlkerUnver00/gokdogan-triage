@@ -27,38 +27,88 @@ import hashlib
 
 from .models import RichEntry, RichHeader
 
-# Compact map of common product ids to a human label. The build number is
-# the precise version discriminator; this just gives the tool family so a
-# reader isn't staring at bare integers. Unknown ids fall back to "prodid N".
-_PRODID_NAMES: dict[int, str] = {
-    0x00: "unmarked / padding",
-    0x01: "import object",
-    0x02: "linker 5.10",
-    0x06: "cvtomf 5.10",
-    0x0A: "linker 6.00",
-    0x0F: "cvtomf 7.00",
-    0x5D: "linker 7.00 (VS2002)",
-    0x5E: "export 7.00",
-    0x5F: "import 7.00",
-    0x60: "C/C++ 13.00 (VS2002)",
-    0x6D: "C/C++ 13.10 (VS2003)",
-    0x83: "C/C++ 14.00 (VS2005)",
-    0x91: "linker 8.00 (VS2005)",
-    0x9A: "C/C++ 15.00 (VS2008)",
-    0x9B: "linker 9.00 (VS2008)",
-    0xAA: "C/C++ 16.00 (VS2010)",
-    0xAB: "linker 10.00 (VS2010)",
-    0xC9: "C/C++ 17.00 (VS2012)",
-    0xCA: "linker 11.00 (VS2012)",
-    0xDB: "C/C++ 18.00 (VS2013)",
-    0xDC: "linker 12.00 (VS2013)",
-    0xE0: "C/C++ 19.00 (VS2015)",
-    0xE1: "linker 14.00 (VS2015)",
-}
+# @comp.id product ids -> Microsoft's internal tool name. Ids 0x00-0xB4 are
+# irregular and listed in order; from VS2010 SP1 (0xB5) on, every toolset
+# release repeats one fixed 18-entry block, so those are generated. Names
+# follow the prodid enum documented by public Rich-header research. The build
+# number stays the precise version discriminator; this names the tool.
+_EARLY = """
+Unknown Import0 Linker510 Cvtomf510 Linker600 Cvtomf600 Cvtres500 Utc11_Basic
+Utc11_C Utc12_Basic Utc12_C Utc12_CPP AliasObj60 VisualBasic60 Masm613 Masm710
+Linker511 Cvtomf511 Masm614 Linker512 Cvtomf512 Utc12_C_Std Utc12_CPP_Std
+Utc12_C_Book Utc12_CPP_Book Implib700 Cvtomf700 Utc13_Basic Utc13_C Utc13_CPP
+Linker610 Cvtomf610 Linker601 Cvtomf601 Utc12_1_Basic Utc12_1_C Utc12_1_CPP
+Linker620 Cvtomf620 AliasObj70 Linker621 Cvtomf621 Masm615 Utc13_LTCG_C
+Utc13_LTCG_CPP Masm620 ILAsm100 Utc12_2_Basic Utc12_2_C Utc12_2_CPP
+Utc12_2_C_Std Utc12_2_CPP_Std Utc12_2_C_Book Utc12_2_CPP_Book Implib622
+Cvtomf622 Cvtres501 Utc13_C_Std Utc13_CPP_Std Cvtpgd1300 Linker622 Linker700
+Export622 Export700 Masm700 Utc13_POGO_I_C Utc13_POGO_I_CPP Utc13_POGO_O_C
+Utc13_POGO_O_CPP Cvtres700 Cvtres710p Linker710p Cvtomf710p Export710p Implib710p
+Masm710p Utc1310p_C Utc1310p_CPP Utc1310p_C_Std Utc1310p_CPP_Std Utc1310p_LTCG_C
+Utc1310p_LTCG_CPP Utc1310p_POGO_I_C Utc1310p_POGO_I_CPP Utc1310p_POGO_O_C
+Utc1310p_POGO_O_CPP Linker624 Cvtomf624 Export624 Implib624 Linker710 Cvtomf710
+Export710 Implib710 Cvtres710 Utc1310_C Utc1310_CPP Utc1310_C_Std Utc1310_CPP_Std
+Utc1310_LTCG_C Utc1310_LTCG_CPP Utc1310_POGO_I_C Utc1310_POGO_I_CPP
+Utc1310_POGO_O_C Utc1310_POGO_O_CPP AliasObj710 AliasObj710p Cvtpgd1310
+Cvtpgd1310p Utc1400_C Utc1400_CPP Utc1400_C_Std Utc1400_CPP_Std Utc1400_LTCG_C
+Utc1400_LTCG_CPP Utc1400_POGO_I_C Utc1400_POGO_I_CPP Utc1400_POGO_O_C
+Utc1400_POGO_O_CPP Cvtpgd1400 Linker800 Cvtomf800 Export800 Implib800 Cvtres800
+Masm800 AliasObj800 PhoenixPrerelease Utc1400_CVTCIL_C Utc1400_CVTCIL_CPP
+Utc1400_LTCG_MSIL Utc1500_C Utc1500_CPP Utc1500_C_Std Utc1500_CPP_Std
+Utc1500_CVTCIL_C Utc1500_CVTCIL_CPP Utc1500_LTCG_C Utc1500_LTCG_CPP
+Utc1500_LTCG_MSIL Utc1500_POGO_I_C Utc1500_POGO_I_CPP Utc1500_POGO_O_C
+Utc1500_POGO_O_CPP Cvtpgd1500 Linker900 Export900 Implib900 Cvtres900 Masm900
+AliasObj900 Resource AliasObj1000 Cvtpgd1600 Cvtres1000 Export1000 Implib1000
+Linker1000 Masm1000 Phx1600_C Phx1600_CPP Phx1600_CVTCIL_C Phx1600_CVTCIL_CPP
+Phx1600_LTCG_C Phx1600_LTCG_CPP Phx1600_LTCG_MSIL Phx1600_POGO_I_C
+Phx1600_POGO_I_CPP Phx1600_POGO_O_C Phx1600_POGO_O_CPP Utc1600_C Utc1600_CPP
+Utc1600_CVTCIL_C Utc1600_CVTCIL_CPP Utc1600_LTCG_C Utc1600_LTCG_CPP
+Utc1600_LTCG_MSIL Utc1600_POGO_I_C Utc1600_POGO_I_CPP Utc1600_POGO_O_C
+Utc1600_POGO_O_CPP
+""".split()
+
+_BLOCK = (
+    "AliasObj{t}", "Cvtpgd{c}", "Cvtres{t}", "Export{t}", "Implib{t}", "Linker{t}",
+    "Masm{t}", "Utc{c}_C", "Utc{c}_CPP", "Utc{c}_CVTCIL_C", "Utc{c}_CVTCIL_CPP",
+    "Utc{c}_LTCG_C", "Utc{c}_LTCG_CPP", "Utc{c}_LTCG_MSIL", "Utc{c}_POGO_I_C",
+    "Utc{c}_POGO_I_CPP", "Utc{c}_POGO_O_C", "Utc{c}_POGO_O_CPP",
+)
+# (first id, tools version, compiler version) of each block-layout release.
+_BLOCK_RELEASES = (
+    (0xB5, "1010", "1610"), (0xC7, "1100", "1700"), (0xD9, "1200", "1800"),
+    (0xEB, "1210", "1810"), (0xFD, "1400", "1900"),
+)
+# The enum grows in release order, so an id range dates the toolset.
+_ERAS = (
+    (0x5A, 0x6C, "VS2003"), (0x6D, 0x82, "VS2005"), (0x83, 0x97, "VS2008"),
+    (0x98, 0xC6, "VS2010"), (0xC7, 0xD8, "VS2012"), (0xD9, 0xFC, "VS2013"),
+    (0xFD, 0x10E, "VS2015+"),
+)
+
+
+def _build_names() -> dict[int, str]:
+    names = dict(enumerate(_EARLY))
+    for first, tools, compiler in _BLOCK_RELEASES:
+        for offset, pattern in enumerate(_BLOCK):
+            names[first + offset] = pattern.format(t=tools, c=compiler)
+    return names
+
+
+_PRODID_NAMES = _build_names()
 
 
 def _prodid_name(prod_id: int) -> str:
-    return _PRODID_NAMES.get(prod_id, f"prodid 0x{prod_id:02x}")
+    if prod_id == 0x00:
+        return "unmarked / padding"
+    if prod_id == 0x01:
+        return "import object (Import0)"
+    name = _PRODID_NAMES.get(prod_id)
+    if name is None:
+        return f"prodid 0x{prod_id:02x}"
+    for low, high, era in _ERAS:
+        if low <= prod_id <= high:
+            return f"{name} ({era})"
+    return name
 
 
 def _rotl32(value: int, bits: int) -> int:
