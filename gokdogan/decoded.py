@@ -27,7 +27,7 @@ import base64
 import re
 
 from .models import DecodedString
-from .strings_ext import classify
+from .strings_ext import _NOISE, classify
 
 # Plaintext markers that betray an encoded IOC / command / executable.
 # Kept >= 6 bytes so a coincidental encoded match is astronomically unlikely
@@ -155,45 +155,92 @@ def _label(method: str, key: int) -> str:
     return f"{method}-0x{key:02x}" if method != "rol" else f"rol-{key}"
 
 
-def _printable_run(decoded: bytes, idx: int) -> tuple[int, int]:
+# Printable bytes map to "p", everything else to "n", so run bounds are two
+# C-speed find() calls instead of a Python loop over the run.
+_RUN_MASK = bytes(0x70 if 0x20 <= b < 0x7F else 0x6E for b in range(256))
+# Anchors whose category must start where the anchor starts (a URL, a user
+# agent): the text after one is read as a single short token.
+_PREFIX_ANCHORS = (b"http://", b"https://", b"ftp://", b"Mozilla/", b"User-Agent")
+_TOKEN_MAX = 300
+# Command and registry patterns match anywhere in a run, so if the whole run
+# did not classify, only a noise domain elsewhere in it can have hidden one.
+# Such a run is re-read in overlapping windows around the anchors.
+_WINDOW, _STRIDE = 512, 256
+# Hostile input can hold millions of anchors; past this much classified text
+# per call the rest of the buffer is skipped, so triage always finishes.
+_CLASSIFY_BUDGET = 8_000_000
+
+
+def _printable_run(mask: bytes, idx: int) -> tuple[int, int]:
     """Bounds of the printable-ASCII run containing position ``idx``."""
-    start = idx
-    while start > 0 and 0x20 <= decoded[start - 1] < 0x7F:
-        start -= 1
-    end = idx
-    while end < len(decoded) and 0x20 <= decoded[end] < 0x7F:
-        end += 1
-    return start, end
+    end = mask.find(b"n", idx)
+    return mask.rfind(b"n", 0, idx) + 1, len(mask) if end == -1 else end
+
+
+class _Budget:
+    """Characters of text left to classify in one recover_encoded_strings call."""
+
+    def __init__(self, chars: int) -> None:
+        self.chars = chars
+
+    def classify(self, text: str) -> str | None:
+        self.chars -= len(text)
+        return classify(text)
 
 
 def _harvest(decoded: bytes, method: str, key: int, min_len: int,
-             seen: set[str], out: list[DecodedString]) -> None:
+             seen: set[str], out: list[DecodedString], budget: _Budget) -> None:
     """Pull classified strings out of a decoded buffer, anchored at each hit.
 
     We locate each anchor inside the decoded stream and take the printable
     run around it. Classification is tried on the whole run first, then on
-    the substring from the anchor onward — so an encoded ``http://...`` still
-    resolves even when non-IOC text decoded just before it.
+    the text at the anchor — so an encoded ``http://...`` still resolves
+    even when non-IOC text decoded just before it. A run that holds many
+    anchors (hostile input can repeat "powershell" thousands of times) is
+    measured and classified once, not once per anchor.
     """
     label = _label(method, key)
+    mask = decoded.translate(_RUN_MASK)
+    run_category: dict[tuple[int, int], str | None] = {}
+    run_noisy: dict[tuple[int, int], bool] = {}
+    window_category: dict[str, str | None] = {}
+    emitted: set[tuple[int, int]] = set()
     for anchor in _ANCHORS:
         pos = 0
-        while True:
+        bounds = (0, 0)
+        last_window = -_WINDOW
+        while budget.chars > 0:
             idx = decoded.find(anchor, pos)
             if idx == -1:
                 break
             pos = idx + 1
-            start, end = _printable_run(decoded, idx)
+            if not bounds[0] <= idx < bounds[1]:
+                bounds = _printable_run(mask, idx)
+                last_window = -_WINDOW
+            start, end = bounds
             if end - start < min_len:
                 continue
-            run = decoded[start:end].decode("latin-1")
-            category = classify(run)
-            value = run
-            if category is None:
-                sub = decoded[idx:end].decode("latin-1")
-                category = classify(sub)
-                if category is not None:
-                    value = sub
+            if bounds not in run_category:
+                run = decoded[start:end].decode("latin-1")
+                run_category[bounds] = budget.classify(run)
+                run_noisy[bounds] = bool(_NOISE.search(run))
+            category = run_category[bounds]
+            if category is not None:
+                if bounds in emitted:
+                    continue
+                emitted.add(bounds)
+                value = decoded[start:end].decode("latin-1")
+            elif anchor in _PREFIX_ANCHORS:
+                value = decoded[idx:min(end, idx + _TOKEN_MAX)].decode("latin-1").split(" ")[0]
+                category = budget.classify(value)
+            elif run_noisy[bounds] and idx >= last_window + _STRIDE:
+                last_window = idx
+                value = decoded[idx:min(end, idx + _WINDOW)].decode("latin-1")
+                if value not in window_category:
+                    window_category[value] = budget.classify(value)
+                category = window_category[value]
+            else:
+                continue
             if category is None or value in seen:
                 continue
             seen.add(value)
@@ -251,12 +298,13 @@ def recover_encoded_strings(data: bytes, min_len: int = 5) -> list[DecodedString
     """Recover XOR/ADD/ROL-, Base64- and hex-encoded strings of interest."""
     out: list[DecodedString] = []
     seen: set[str] = set()
+    budget = _Budget(_CLASSIFY_BUDGET)
 
     for method, key in _find_live_keys(data):
-        if len(out) >= _MAX_RESULTS:
+        if len(out) >= _MAX_RESULTS or budget.chars <= 0:
             break
         decoded = _decode(data, method, key)
-        _harvest(decoded, method, key, min_len, seen, out)
+        _harvest(decoded, method, key, min_len, seen, out, budget)
 
     _harvest_base64(data, seen, out)
     _harvest_hex(data, seen, out)

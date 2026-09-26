@@ -1,4 +1,5 @@
 import base64
+import time
 
 from gokdogan.capabilities import infer_capabilities
 from gokdogan.decoded import _rol8, recover_encoded_strings
@@ -109,3 +110,32 @@ def test_decoded_yields_obfuscation_capability():
     obf = next((c for c in caps if c.name == "string-obfuscation"), None)
     assert obf is not None
     assert "T1140" in obf.attack
+
+
+def test_repeated_anchor_in_one_run_is_classified_once():
+    # A long run repeating an anchor used to be rescanned once per copy.
+    blob = b"\xff" * 8 + _xor(b"powershell " * 1500, 0x41) + b"\xff" * 8
+    start = time.perf_counter()
+    recover_encoded_strings(blob)
+    assert time.perf_counter() - start < 10.0
+
+
+def test_noise_domain_does_not_make_a_long_run_expensive():
+    # A noise domain anywhere in a run sends every anchor to the fallback path.
+    blob = b"\xff" * 8 + _xor(b"microsoft.com " + b"powershell " * 40_000, 0x5A) + b"\xff" * 8
+    start = time.perf_counter()
+    recover_encoded_strings(blob)
+    assert time.perf_counter() - start < 15.0
+
+
+def test_command_next_to_a_noise_domain_is_still_recovered():
+    plain = b"see microsoft.com " + b"x" * 600 + b" cmd.exe /c vssadmin delete shadows /all /quiet"
+    blob = b"\xff" * 8 + _xor(plain, 0x33) + b"\xff" * 8
+    assert any(d.category == "command" for d in recover_encoded_strings(blob))
+
+
+def test_url_after_junk_text_is_still_recovered():
+    plain = b"junk text before it http://evil.example/gate.php and after"
+    blob = b"\xff" * 8 + _xor(plain, 0x21) + b"\xff" * 8
+    urls = [d.value for d in recover_encoded_strings(blob) if d.category == "url"]
+    assert urls == ["http://evil.example/gate.php"]

@@ -1,6 +1,8 @@
 // Behavioral string indicators. These are triage heuristics, not
 // family signatures — each match is a reason to look closer, not a
-// conviction on its own.
+// conviction on its own. meta.overlaps names a capability built from the
+// same evidence (an imported API is also a string in the file); when that
+// capability fired, the verdict does not count the rule a second time.
 
 rule PowerShell_EncodedCommand : execution
 {
@@ -24,11 +26,16 @@ rule Shadow_Copy_Deletion : ransomware
         description = "Commands that destroy Volume Shadow Copies / backups"
         weight = 30
         attack = "T1490"
+        overlaps = "anti-recovery"
     strings:
         $vss = "vssadmin delete shadows" ascii wide nocase
         $wmic = "shadowcopy delete" ascii wide nocase
         $bcd = "bcdedit /set" ascii wide nocase
         $wbadmin = "wbadmin delete catalog" ascii wide nocase
+        // the same commands spelled with .exe (optionally quoted, full path)
+        $vss_exe = /vssadmin\.exe"?\s{1,4}delete\s{1,4}shadows/ ascii wide nocase
+        $bcd_exe = /bcdedit\.exe"?\s{1,4}\/set/ ascii wide nocase
+        $wbadmin_exe = /wbadmin\.exe"?\s{1,4}delete\s{1,4}catalog/ ascii wide nocase
     condition:
         uint16(0) == 0x5A4D and any of them
 }
@@ -54,6 +61,7 @@ rule Injection_API_Cluster : injection
         description = "Classic remote-injection API trio referenced by name"
         weight = 15
         attack = "T1055"
+        overlaps = "process-injection"
     strings:
         $a = "VirtualAllocEx" ascii
         $b = "WriteProcessMemory" ascii

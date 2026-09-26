@@ -35,3 +35,25 @@ def test_dedup():
 
 def test_clean_data_extracts_nothing():
     assert extract_config(b"just some harmless ascii text with no config") == []
+
+
+def test_stager_url_stops_at_binary_bytes():
+    # In a real binary the URL is followed by NULs and other data, not spaces.
+    blob = (b"xx https://raw.githubusercontent.com/org/app/master/VERSION" + bytes([0])
+            + b"none" + bytes([0, 0x43, 0xd0]) + b"shlwapi")
+    urls = [f.value for f in extract_config(blob) if f.family == "Remote config / stager"]
+    assert urls == ["https://raw.githubusercontent.com/org/app/master/VERSION"]
+
+
+def test_bare_stager_prefix_is_reported():
+    # Loaders keep the host prefix and append the paste id at runtime.
+    blob = b"xx https://pastebin.com/raw/" + bytes([0]) + b"k3Jd9sQa" + bytes([0])
+    urls = [f.value for f in extract_config(blob) if f.family == "Remote config / stager"]
+    assert urls == ["https://pastebin.com/raw/"]
+
+
+def test_bare_stager_prefix_before_other_binary_bytes():
+    for tail in (bytes([1, 2, 3]), bytes([0xE9]) + b"t", bytes([0x7F])):
+        blob = b"https://raw.githubusercontent.com/" + tail
+        urls = [f.value for f in extract_config(blob) if f.family == "Remote config / stager"]
+        assert urls == ["https://raw.githubusercontent.com/"], tail

@@ -167,6 +167,9 @@ class Capability:
     severity: int        # 1 (info) .. 3 (high)
     evidence: list[str] = field(default_factory=list)  # APIs or strings that triggered it
     attack: list[str] = field(default_factory=list)    # MITRE ATT&CK technique ids
+    # Where the evidence came from: "imports", "exports", "strings", "decoded",
+    # "resources" or "sections". The verdict caps only import/export tags.
+    source: str = "imports"
 
 
 @dataclass
@@ -184,6 +187,7 @@ class YaraHit:
     tags: list[str] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
     strings: list[str] = field(default_factory=list)  # matched string identifiers
+    matched: list[str] = field(default_factory=list)  # matched text (decoded, capped)
 
 
 @dataclass
@@ -215,6 +219,7 @@ class TriageReport:
     config_blobs: list[ConfigBlob] = field(default_factory=list)
     exports: ExportInfo | None = None
     delay_imports: list[str] = field(default_factory=list)  # delay-loaded DLL names
+    import_count: int = 0  # distinct functions in the normal import table (no delay-load)
     overall_entropy: float = 0.0
     packer: PackerInfo = field(default_factory=lambda: PackerInfo(detected=False))
     anomalies: list[str] = field(default_factory=list)

@@ -103,11 +103,15 @@ class NotAPEError(ValueError):
 def load_pe(path: str | Path) -> tuple[pefile.PE, bytes]:
     """Parse a PE file, returning the pefile object and raw bytes."""
     data = Path(path).read_bytes()
+    return parse_pe(data, str(path)), data
+
+
+def parse_pe(data: bytes, label: str = "<memory>") -> pefile.PE:
+    """Parse PE bytes already in memory."""
     try:
-        pe = pefile.PE(data=data, fast_load=False)
+        return pefile.PE(data=data, fast_load=False)
     except pefile.PEFormatError as exc:
-        raise NotAPEError(f"{path}: not a valid PE file ({exc})") from exc
-    return pe, data
+        raise NotAPEError(f"{label}: not a valid PE file ({exc})") from exc
 
 
 def _section_name(section: pefile.SectionStructure) -> str:
@@ -124,11 +128,29 @@ def _entry_section(pe: pefile.PE) -> str | None:
     return None
 
 
+_IMAGE_DEBUG_TYPE_REPRO = 16
+
+
+def _is_reproducible_build(pe: pefile.PE) -> bool:
+    """True for a deterministic (/Brepro) build.
+
+    Its TimeDateStamp is a hash of the build output, not a time, so it can
+    read as 1979 or 2038 and says nothing about when or how the file was made.
+    Every current Microsoft binary is built this way.
+    """
+    return any(getattr(entry.struct, "Type", None) == _IMAGE_DEBUG_TYPE_REPRO
+               for entry in getattr(pe, "DIRECTORY_ENTRY_DEBUG", None) or [])
+
+
 def _timestamp(pe: pefile.PE) -> tuple[str | None, str | None]:
     """Return (iso timestamp, anomaly note or None)."""
     ts = pe.FILE_HEADER.TimeDateStamp
     if ts == 0:
+        # A build hash is never zero, so a repro entry does not excuse this.
         return None, "compile timestamp is zero (deliberately wiped)"
+    if _is_reproducible_build(pe):
+        # The entry is one byte to forge, so the raw value stays visible.
+        return f"0x{ts:08x} (reproducible build: a hash, not a date)", None
     dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
     iso = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
     now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -282,6 +304,15 @@ def _collect_imports(pe: pefile.PE, attr: str) -> dict[str, list[str]]:
 def imported_functions(pe: pefile.PE) -> dict[str, list[str]]:
     """Map of lowercase DLL name -> imported function names (normal imports)."""
     return _collect_imports(pe, "DIRECTORY_ENTRY_IMPORT")
+
+
+def distinct_import_count(imports: dict[str, list[str]]) -> int:
+    """How much of the Windows API a program really links: distinct (DLL,
+    function) pairs of the normal import table. Duplicates and delay-load
+    entries are left out, since both cost nothing to add (a delay import is
+    only resolved when first called, so it may name a DLL that is not there).
+    """
+    return len({(dll, name.lower()) for dll, names in imports.items() for name in names})
 
 
 def delay_imported_functions(pe: pefile.PE) -> dict[str, list[str]]:

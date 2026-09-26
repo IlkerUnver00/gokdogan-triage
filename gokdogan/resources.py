@@ -44,6 +44,32 @@ _COMPRESSED_OK_TYPES = {
     "RT_BITMAP", "RT_ANIICON", "RT_ANICURSOR",
 }
 
+# Media formats that are compressed by design. A resource that is one is
+# expected to be near-random whatever type it is filed under: MFC and Office
+# store hundreds of PNGs under a custom "PNG" type, not RT_ICON. Archives
+# (ZIP, CAB, gzip, 7z, ...) stay flagged: a compressed second stage is what a
+# dropper carries, and only 5 of 2,888 benign binaries swept carry one.
+_RIFF_FORMS = (b"WAVE", b"AVI ", b"ACON", b"WEBP", b"RMID")
+
+
+def _is_compressed_media(data: bytes) -> bool:
+    """True for a resource with the header of a compressed image, sound or font.
+
+    The checks go a little past the magic (the PNG header chunk, the RIFF
+    size and form, the JPEG end marker). They only raise the bar: a forged
+    header still passes, much as filing a blob under RT_BITMAP always did.
+    """
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return data[8:16] == b"\x00\x00\x00\x0dIHDR"
+    if data.startswith(b"RIFF"):
+        size = int.from_bytes(data[4:8], "little")
+        return data[8:12] in _RIFF_FORMS and len(data) - 16 <= size + 8 <= len(data)
+    if data.startswith(b"\xff\xd8\xff"):
+        return data.rstrip(b"\x00").endswith(b"\xff\xd9")
+    if data.startswith(b"ID3"):
+        return data[3:4] in (b"\x02", b"\x03", b"\x04")
+    return data.startswith((b"GIF87a", b"GIF89a", b"OggS\x00", b"wOFF", b"wOF2"))
+
 _DOS_STUB_MARKER = b"This program cannot be run in DOS mode"
 
 
@@ -77,7 +103,8 @@ def _classify_resource(type_name: str, data: bytes, entropy: float) -> list[str]
         flags.append("contains an embedded executable (DOS stub found)")
     # High entropy is only a signal where it's unexpected; compressed image
     # resources (PNG icons) are legitimately near-random.
-    if entropy >= HIGH_ENTROPY and type_name not in _COMPRESSED_OK_TYPES:
+    if (entropy >= HIGH_ENTROPY and type_name not in _COMPRESSED_OK_TYPES
+            and not _is_compressed_media(data)):
         flags.append(f"high entropy {entropy:.2f} (packed/encrypted)")
     # Type mismatch = a declared-inert resource that actually carries a PE.
     if embedded and type_name in _INERT_TYPES:
@@ -136,11 +163,20 @@ def _read_leaf(pe: pefile.PE, type_name: str, name: str, lang) -> ResourceInfo |
 
 def resource_anomalies(resources: list[ResourceInfo]) -> list[str]:
     """Structural notes to fold into the report's anomaly list."""
-    anomalies: list[str] = []
-    for r in resources:
-        for flag in r.flags:
-            if flag.startswith("embedded PE") or flag.startswith("contains an embedded"):
-                anomalies.append(f"resource {r.type}/{r.name}: {flag}")
-            elif flag.startswith("high entropy"):
-                anomalies.append(f"resource {r.type}/{r.name}: {flag}")
-    return anomalies
+    embedded = [(r, f) for r in resources for f in r.flags
+                if f.startswith("embedded PE") or f.startswith("contains an embedded")]
+    packed = [(r, f) for r in resources for f in r.flags if f.startswith("high entropy")]
+    # One note per kind, not per resource: forty encrypted resources are one
+    # fact about the file, and scoring them forty times buried real signals.
+    return [_one_note(hits, label) for hits, label in
+            ((embedded, "carry an embedded executable"),
+             (packed, "are high-entropy (packed/encrypted)")) if hits]
+
+
+def _one_note(hits: list, label: str) -> str:
+    if len(hits) == 1:
+        r, flag = hits[0]
+        return f"resource {r.type}/{r.name}: {flag}"
+    examples = ", ".join(f"{r.type}/{r.name}" for r, _ in hits[:3])
+    more = f", +{len(hits) - 3} more" if len(hits) > 3 else ""
+    return f"{len(hits)} resources {label}: {examples}{more}"
