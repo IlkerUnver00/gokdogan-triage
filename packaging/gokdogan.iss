@@ -7,7 +7,7 @@
 ; Build:  ISCC.exe packaging\gokdogan.iss   (after packaging\build_exe.ps1)
 
 #define AppName    "gokdogan"
-#define AppVersion "0.5.2"
+#define AppVersion "0.6.0"
 #define AppExe     "gokdogan.exe"
 
 [Setup]

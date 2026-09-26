@@ -4,7 +4,7 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 0.6.0
+## [0.6.0] — 2026-09-26
 
 False positives, measured and cut. A new benchmark script triaged installed
 software on one workstation and counted every verdict above `LIKELY_CLEAN`
@@ -240,6 +240,7 @@ distribution. Consolidates all prior feature work into one shippable tool.
   weighted verdict (`LIKELY_CLEAN` / `SUSPICIOUS` / `HIGH_RISK`) where every
   point carries a printed reason.
 
+[0.6.0]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.6.0
 [0.5.2]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.2
 [0.5.1]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.1
 [0.5.0]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.0
