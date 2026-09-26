@@ -54,18 +54,30 @@ class CapabilityRule:
 _CHARSET_SUFFIX = re.compile(r"(?<=[a-z0-9])[AW]$")
 
 
-def _groups(apis: list[str] | None) -> tuple[frozenset[str], ...]:
+def _groups(apis: list | None) -> tuple[frozenset[str], ...]:
+    """One group per function (A/W variants together); a nested list is one
+    explicit group ("any of these")."""
     families: dict[str, set[str]] = {}
     for api in apis or []:
-        families.setdefault(_CHARSET_SUFFIX.sub("", api), set()).add(api.lower())
+        if isinstance(api, (list, tuple)):
+            families[f"#{len(families)}"] = {a.lower() for a in api}
+        else:
+            families.setdefault(_CHARSET_SUFFIX.sub("", api), set()).add(api.lower())
     return tuple(frozenset(g) for g in families.values())
 
 
+def _with_bare_names(names: frozenset[str]) -> frozenset[str]:
+    """Add "setwindowshookex" for "setwindowshookexw": a P/Invoke declaration
+    may give the bare name and leave the A/W choice to the runtime."""
+    return names | {n[:-1] for n in names if n[-1:] in ("a", "w") and n[:-1] + ("w" if n[-1] == "a" else "a") in names}
+
+
 def _rule(name: str, description: str, severity: int, apis: list[str], min_hits: int = 1,
-          required: list[str] | None = None, support: list[str] | None = None,
+          required: list | None = None, support: list | None = None,
           min_required: int = 1) -> CapabilityRule:
-    req, sup = _groups(required), _groups(support)
-    every = frozenset(a.lower() for a in apis).union(*req, *sup)
+    req = tuple(_with_bare_names(g) for g in _groups(required))
+    sup = tuple(_with_bare_names(g) for g in _groups(support))
+    every = _with_bare_names(frozenset(a.lower() for a in apis)).union(*req, *sup)
     return CapabilityRule(name, description, severity, every, min_hits, req, sup,
                           min_required if req else 0)
 
@@ -228,6 +240,124 @@ RULES: list[CapabilityRule] = [
     ),
 ]
 
+# .NET: members of other assemblies an assembly calls (its MemberRef table),
+# as "namespace.type::member" ("...::load(byte[])" for a load from memory).
+# P/Invoke declarations are native imports and go through RULES instead.
+# Each rule was priced on 1,688 benign .NET assemblies (scripts/benign_sweep.py
+# samples) before it went in; the most common, network, fires on about 5%.
+_WEBCLIENT = "System.Net.WebClient::"
+_HTTPCLIENT = "System.Net.Http.HttpClient::"
+_DOWNLOAD = [_WEBCLIENT + m for m in ("DownloadFile", "DownloadData", "DownloadFileAsync",
+                                      "DownloadDataAsync", "DownloadFileTaskAsync",
+                                      "DownloadDataTaskAsync", "OpenRead")] \
+    + [_HTTPCLIENT + "GetByteArrayAsync", "System.Net.Http.HttpContent::ReadAsByteArrayAsync",
+       "System.Net.Http.HttpContent::ReadAsStreamAsync", "System.Net.WebResponse::GetResponseStream",
+       "System.Net.HttpWebResponse::GetResponseStream",
+       "Microsoft.VisualBasic.Devices.Network::DownloadFile"]
+_LOAD_FROM_MEMORY = ["System.Reflection.Assembly::Load(byte[])", "System.AppDomain::Load(byte[])",
+                     "System._AppDomain::Load(byte[])",
+                     "System.Runtime.Loader.AssemblyLoadContext::LoadFromStream"]
+_RUN = ["System.Diagnostics.Process::Start", "Microsoft.VisualBasic.Interaction::Shell"]
+
+MANAGED_RULES: list[CapabilityRule] = [
+    _rule(
+        "network",
+        "Communicates over the network (.NET)",
+        2,
+        _DOWNLOAD
+        + [_WEBCLIENT + m for m in ("DownloadString", "DownloadStringAsync", "DownloadStringTaskAsync",
+                                    "UploadData", "UploadValues", "UploadString", "UploadFile", "OpenRead")]
+        + [_HTTPCLIENT + m for m in ("GetAsync", "PostAsync", "SendAsync", "GetStringAsync",
+                                     "GetStreamAsync", "PutAsync")]
+        + ["System.Net.WebRequest::Create", "System.Net.WebRequest::GetResponse",
+           "System.Net.HttpWebRequest::GetResponse", "System.Net.Sockets.TcpClient::Connect",
+           "System.Net.Sockets.TcpClient::.ctor", "System.Net.Sockets.Socket::Connect"],
+    ),
+    # Fetching bytes and then starting a process or loading them as code.
+    _rule(
+        "download-execute",
+        "Downloads data and runs it (.NET)",
+        3,
+        [],
+        min_hits=2,
+        required=[_DOWNLOAD],
+        support=[[*_RUN, *_LOAD_FROM_MEMORY]],
+        min_required=2,
+    ),
+    # Assembly.Load(byte[]) then invoking what it loaded: a stage run from memory.
+    _rule(
+        "reflective-loading",
+        "Loads a .NET assembly from memory and runs it",
+        3,
+        [],
+        min_hits=2,
+        required=[_LOAD_FROM_MEMORY],
+        support=[["System.Reflection.Assembly::get_EntryPoint", "System.Reflection.MethodBase::Invoke",
+                  "System.Reflection.MethodInfo::Invoke", "System.Activator::CreateInstance",
+                  "System.Reflection.Assembly::CreateInstance", "System.Type::InvokeMember"]],
+        min_required=2,
+    ),
+    _rule("screen-capture", "Takes screenshots (.NET)", 2, ["System.Drawing.Graphics::CopyFromScreen"]),
+    _rule(
+        "clipboard-access",
+        "Reads the clipboard (.NET)",
+        2,
+        [f"{ns}.Clipboard::{m}" for ns in ("System.Windows.Forms", "System.Windows")
+         for m in ("GetText", "GetData", "GetImage", "GetFileDropList", "GetDataObject")],
+    ),
+    _rule(
+        "persistence-registry",
+        "Writes to the registry (.NET; autorun persistence when paired with Run-key strings)",
+        1,
+        ["Microsoft.Win32.RegistryKey::SetValue", "Microsoft.Win32.Registry::SetValue"],
+    ),
+    # SMTP is how Agent Tesla-style stealers send what they collect.
+    _rule(
+        "email-exfiltration",
+        "Sends email over SMTP (.NET)",
+        2,
+        ["System.Net.Mail.SmtpClient::Send", "System.Net.Mail.SmtpClient::SendAsync",
+         "System.Net.Mail.SmtpClient::SendMailAsync"],
+    ),
+    _rule(
+        "crypto",
+        "Uses symmetric encryption (.NET: config decryption, C2 crypto)",
+        2,
+        ["System.Security.Cryptography.RijndaelManaged::.ctor", "System.Security.Cryptography.Aes::Create",
+         "System.Security.Cryptography.AesCryptoServiceProvider::.ctor",
+         "System.Security.Cryptography.TripleDESCryptoServiceProvider::.ctor",
+         "System.Security.Cryptography.SymmetricAlgorithm::CreateDecryptor",
+         "System.Security.Cryptography.SymmetricAlgorithm::CreateEncryptor"],
+    ),
+    # DPAPI decryption is how browser passwords and cookies are read, through
+    # the framework or straight through P/Invoke.
+    _rule(
+        "credential-access",
+        "Decrypts DPAPI-protected data (browser passwords, cookies)",
+        2,
+        ["System.Security.Cryptography.ProtectedData::Unprotect", "CryptUnprotectData"],
+    ),
+    # In-process shellcode: native memory allocated or made executable through
+    # P/Invoke (matched by function name, whatever DLL spelling), then called
+    # as a delegate or started as a thread.
+    _rule(
+        "shellcode-execution",
+        "Runs native code from memory it allocated (.NET shellcode runner)",
+        3,
+        [],
+        min_hits=2,
+        required=[["VirtualAlloc", "VirtualProtect", "NtAllocateVirtualMemory", "NtProtectVirtualMemory"]],
+        support=[["System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointer",
+                  "CreateThread", "NtCreateThreadEx"]],
+        min_required=2,
+    ),
+]
+
+# Rules that need two pieces of evidence together. When the IL can be read,
+# both must be called from one class: a large library that downloads in one
+# corner and starts a process in another is not a downloader.
+_SAME_CLASS = {"download-execute", "reflective-loading", "shellcode-execution"}
+
 # String-category evidence that upgrades or adds capabilities.
 _RUN_KEY_MARKERS = ("currentversion\\run", "currentversion\\runonce", "userinit", "winlogon\\shell")
 # Applied to strings already classified as commands (strings_ext). A tool
@@ -249,7 +379,17 @@ def infer_capabilities(
     decoded: list[DecodedString] | None = None,
     config_blobs: list[ConfigBlob] | None = None,
     overlay=None,
+    managed: set[str] | None = None,
+    pinvoke: dict[str, list[str]] | None = None,
+    managed_classes: list[set[str]] | None = None,
 ) -> list[Capability]:
+    """Capabilities from imports (P/Invoke functions included by the engine),
+    .NET member references, strings, resources, exports and blobs.
+
+    managed_classes, when the IL could be read, holds per class the members
+    and P/Invoke functions its code calls; the two-part .NET rules then need
+    both parts in one class. Without it they read the whole assembly.
+    """
     all_apis = {api.lower(): api for apis in imports.values() for api in apis}
     capabilities: list[Capability] = []
 
@@ -268,6 +408,21 @@ def infer_capabilities(
                     attack=techniques_for(rule.name),
                 )
             )
+
+    if managed or pinvoke:
+        refs = set(managed or ())
+        for dll, fns in (pinvoke or {}).items():
+            refs |= {f"{dll}!{fn}".lower() for fn in fns} | {fn.lower() for fn in fns}
+        for rule in MANAGED_RULES:
+            scopes = managed_classes if (rule.name in _SAME_CLASS and managed_classes is not None) \
+                else [refs]
+            scope = next((s for s in scopes if _specific_evidence(rule, s)
+                          and len(rule.apis & s) >= rule.min_hits), None)
+            if scope is not None:
+                capabilities.append(Capability(
+                    name=rule.name, description=rule.description, severity=rule.severity,
+                    evidence=sorted(rule.apis & scope), attack=techniques_for(rule.name),
+                    source="managed"))
 
     # --- string-derived upgrades -------------------------------------
     run_key_strings = [
@@ -375,5 +530,25 @@ def infer_capabilities(
                 )
             )
 
+    capabilities = _merge_same_name(capabilities)
     capabilities.sort(key=lambda c: (-c.severity, c.name))
     return capabilities
+
+
+def _merge_same_name(capabilities: list[Capability]) -> list[Capability]:
+    """One entry per capability name: native and .NET evidence for "network"
+    (or two routes to "reflective-loading") are one behaviour, scored once
+    at the higher severity."""
+    merged: dict[str, Capability] = {}
+    for cap in capabilities:
+        kept = merged.get(cap.name)
+        if kept is None:
+            merged[cap.name] = cap
+            continue
+        if cap.severity > kept.severity:
+            kept.severity, kept.description = cap.severity, cap.description
+        kept.evidence += [e for e in cap.evidence if e not in kept.evidence]
+        if kept.source != cap.source:
+            # Content-derived evidence keeps the tag out of the size cap.
+            kept.source = cap.source if kept.source in ("imports", "exports", "managed") else kept.source
+    return list(merged.values())

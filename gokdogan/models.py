@@ -47,6 +47,15 @@ class DotNetInfo:
     flags: list[str] = field(default_factory=list)         # IL only, 32-bit required, ...
     entry_point_token: str = ""
     obfuscators: list[str] = field(default_factory=list)   # detected .NET obfuscators
+    # From the metadata tables (dnfile): native functions declared through
+    # P/Invoke ("dll!Name", the first 500), how many there are and how many
+    # the IL calls (None when the IL could not be tied to calls), and how many
+    # members of other assemblies it references.
+    pinvoke: list[str] = field(default_factory=list)
+    pinvoke_count: int = 0
+    pinvoke_called: int | None = None
+    member_refs: int = 0
+    metadata_error: str | None = None
 
 
 @dataclass
@@ -167,8 +176,9 @@ class Capability:
     severity: int        # 1 (info) .. 3 (high)
     evidence: list[str] = field(default_factory=list)  # APIs or strings that triggered it
     attack: list[str] = field(default_factory=list)    # MITRE ATT&CK technique ids
-    # Where the evidence came from: "imports", "exports", "strings", "decoded",
-    # "resources" or "sections". The verdict caps only import/export tags.
+    # Where the evidence came from: "imports", "exports", "managed" (.NET member
+    # references), "strings", "decoded", "resources" or "sections". The verdict
+    # caps only import/export/managed tags, and only in large programs.
     source: str = "imports"
 
 

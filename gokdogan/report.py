@@ -118,7 +118,17 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
         stream.write(f"  .NET       : managed assembly, CLR {dn.runtime_version}{flags}\n")
         if dn.obfuscators:
             stream.write(c(_YELLOW, f"               obfuscator: {', '.join(dn.obfuscators)}\n"))
-        stream.write(c(_DIM, "               (managed code — import-based capabilities are limited)\n"))
+        if dn.metadata_error:
+            stream.write(c(_YELLOW, f"               metadata unreadable: {dn.metadata_error}\n"))
+        else:
+            called = (f", {dn.pinvoke_called} called" if dn.pinvoke_called is not None
+                      else "; calls not traced, rules read the whole assembly")
+            stream.write(c(_DIM, f"               metadata: {dn.member_refs} member references, "
+                                 f"{dn.pinvoke_count} P/Invoke declarations{called}\n"))
+            if dn.pinvoke:
+                more = dn.pinvoke_count - 6
+                shown = ", ".join(dn.pinvoke[:6]) + (f", +{more} more" if more > 0 else "")
+                stream.write(c(_DIM, f"               P/Invoke: {shown}\n"))
 
     header("Sections")
     stream.write(f"  {'name':<10} {'raw size':>10} {'entropy':>8}  flags\n")

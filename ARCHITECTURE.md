@@ -10,7 +10,7 @@ transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 - **~5,200 lines** of Python across 31 focused modules
 - **~2,950 lines** of tests · **256 tests** · real-binary integration suite
 - False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 2.2% of held-out benign files flagged, down from 12.7% at v0.5.2
-- Hard deps: `pefile`, `ppdeep` · optional: `yara-python`, `py-tlsh`
+- Hard deps: `pefile`, `ppdeep`, `dnfile` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
 
@@ -88,7 +88,7 @@ fully decoupled.
 - [`resources.py`](gokdogan/resources.py) — `.rsrc` walker: embedded PEs, high-entropy blobs
 - [`overlay.py`](gokdogan/overlay.py) — overlay content: magic-byte type, entropy, embedded PE
 - [`signature.py`](gokdogan/signature.py) — Authenticode verification (WinVerifyTrust) + cert names
-- [`dotnet.py`](gokdogan/dotnet.py) — managed/.NET CLR-header detection + obfuscator fingerprints
+- [`dotnet.py`](gokdogan/dotnet.py) — .NET: CLR header, obfuscators, metadata references, P/Invoke and IL call sites (dnfile)
 
 **Content**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE extraction + IOC classification
@@ -126,7 +126,7 @@ fully decoupled.
 | **Identity / clustering** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
 | **Structure** | per-section + overall entropy, entropy islands, packer detection, W+X sections, TLS callbacks, oversized overlay, wiped/future timestamps, checksum mismatch |
 | **Content** | classified IOC strings (URL/IP/domain/registry/PDB/command/UA), XOR/ADD/ROL/base64/hex-recovered strings, embedded PEs, encrypted-config blobs |
-| **Behavior** | import + delay-import + export capabilities (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) with per-rule minimum hit counts |
+| **Behavior** | import + delay-import + export + .NET metadata/P/Invoke capabilities (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) with per-rule minimum hit counts |
 | **Intelligence** | MITRE ATT&CK technique mapping (grouped by tactic), YARA, opt-in reputation |
 
 ---
@@ -205,7 +205,7 @@ last rows below. Representative weights:
 | Valid Authenticode signature | −15, or 0 if the certificate table carries unauthenticated data |
 | Signature present but not valid (self-signed, expired, unverified) | 0 |
 | Packing signals together (packer, entropy, packer YARA, stub anomalies) | capped at 30 |
-| Severity 1–2 capabilities from imports/exports, in a file importing ≥ 200 functions | capped at 16 together |
+| Severity 1–2 capabilities from imports/exports/.NET references, in a file importing ≥ 200 native functions | capped at 16 together |
 | YARA rule on the same matched text as the capability its `meta.overlaps` names | only the weight above that capability's points |
 
 Thresholds: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. The full breakdown is
@@ -241,7 +241,7 @@ not been measured.
 
 ## 8. Tech stack
 
-Python 3.10+ · `pefile` (PE parsing) · `ppdeep` (pure-Python ssdeep) ·
+Python 3.10+ · `pefile` (PE parsing) · `ppdeep` (pure-Python ssdeep) · `dnfile` (.NET metadata) ·
 optional `yara-python`, `py-tlsh` · standard-library `urllib` for reputation.
 No web framework in the core (the upload service is an optional FastAPI extra),
 no heavyweight dependencies — a self-contained CLI that

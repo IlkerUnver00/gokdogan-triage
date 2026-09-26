@@ -630,6 +630,8 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             from gokdogan.engine import triage_bytes  # noqa: F401  (0.6.0 and later)
+        except ModuleNotFoundError as exc:  # a dependency, e.g. dnfile in an old lab snapshot
+            ap.error(f"cannot load the engine: {exc}; run `pip install -e .` from the repository")
         except ImportError:
             ap.error(f"gokdogan {gokdogan.__version__} has no triage_bytes(); use 0.6.0 or later")
         engine = {"version": gokdogan.__version__, "path": os.path.dirname(gokdogan.__file__),

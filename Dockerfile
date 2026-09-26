@@ -14,7 +14,7 @@ LABEL org.opencontainers.image.title="gokdogan" \
 WORKDIR /app
 COPY . /app
 
-# yara-python provides the optional YARA stage; ppdeep/pefile are core.
+# yara-python provides the optional YARA stage; ppdeep/pefile/dnfile are core.
 RUN pip install --no-cache-dir -e ".[yara]"
 
 # Run as an unprivileged user — this tool only ever reads samples.
