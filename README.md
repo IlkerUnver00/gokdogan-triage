@@ -374,6 +374,7 @@ gokdogan/
   - [x] calibration against it: specific-API rules, one fact counted once,
         size-aware capability cap, reproducible-build timestamps
   - [x] detection guard: synthetic malware-shaped reports keep their verdicts
+  - [x] detection benchmark harness (`scripts/recall_sweep.py`, [BENCHMARK.md](BENCHMARK.md))
   - [ ] recall on a labelled malware corpus (isolated lab)
   - [ ] a second machine and software mix for the false-positive rate
 
@@ -462,7 +463,11 @@ python scripts/benign_sweep.py --limit 3000 --out sweep_results/sample
 It writes per-file results, the signals behind the flagged files and the
 worst offenders to `sweep_results/` (git-ignored: the paths describe your
 machine). `--paths-from` re-scores the same files with another engine
-(`--engine`), and `--exclude-results` draws a held-out sample.
+(`--engine`), and `--exclude-results` draws a held-out sample. Its
+counterpart for detection, `scripts/recall_sweep.py`, triages a labelled
+malware corpus inside an isolated lab VM without extracting or running a
+sample; [BENCHMARK.md](BENCHMARK.md) describes both, the lab rules and how
+to read and report the numbers.
 
 ## License
 
