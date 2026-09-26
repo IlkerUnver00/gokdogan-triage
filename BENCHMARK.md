@@ -1,0 +1,139 @@
+# Measuring gokdogan
+
+A triage verdict is only as useful as two numbers: how often it flags clean
+software (false positives) and how often it flags malware (detection, or
+recall). gokdogan ships a script for each half. Neither runs a sample.
+
+| Half | Script | Where it runs | Measured so far |
+|---|---|---|---|
+| False positives | [`scripts/benign_sweep.py`](scripts/benign_sweep.py) | any machine, over installed software | 2.2% of 2,694 held-out benign files flagged (0.6.0, one Windows 11 machine) |
+| Detection | [`scripts/recall_sweep.py`](scripts/recall_sweep.py) | an isolated analysis VM only | not yet measured |
+
+## False positives
+
+```bash
+python scripts/benign_sweep.py --limit 3000 --out sweep_results/tune
+# the same files, scored by another engine (a worktree of a release)
+python scripts/benign_sweep.py --paths-from sweep_results/tune/results.jsonl \
+    --engine ../gokdogan-v0.5.2 --out sweep_results/tune_old
+# a held-out sample: files (and byte-identical copies) of the tuning run left out
+python scripts/benign_sweep.py --limit 3000 --seed 2 \
+    --exclude-results sweep_results/tune/results.jsonl --out sweep_results/holdout
+```
+
+Every file is assumed benign because it is installed software. Results go
+to `sweep_results/` (git-ignored: the paths describe your machine). Compare
+engines only on the same file list (`--paths-from`): a seed picks a
+different sample as soon as one file on disk changes.
+
+## Detection
+
+### Lab rules
+
+- **Isolated VM only.** No shared folders, no clipboard sharing, no network
+  while samples are inside, and a snapshot to revert to. Never the analyst's
+  everyday machine. As a safety net the script refuses a corpus on a network
+  share or mapped remote drive, or under a OneDrive (including synced
+  SharePoint libraries), Dropbox, Google Drive or iCloud folder; it cannot
+  check the rest of these rules for you.
+- **Samples stay zipped.** Keep them in password-protected ZIPs (password
+  `infected`). `recall_sweep.py` reads each member into memory, never more
+  than `--max-mb` of it whatever the archive claims, and triages it there
+  with `triage_bytes()`: nothing is extracted, written or run. Members
+  compressed with bzip2 or LZMA are skipped, since their output cannot be
+  bounded. MalwareBazaar's AES ZIPs need `pyzipper`.
+- **An antivirus inside the VM** may quarantine or upload what it can scan.
+  Zipped samples on an offline VM give it nothing to act on.
+- **Only results leave the lab.** `results.jsonl`, `summary.json`,
+  `summary.md`, `engine.json` and the copied `manifest.csv` hold hashes,
+  verdicts and score reasons (which can quote short names from a sample,
+  such as a resource name), never sample bytes.
+- Follow the terms of the source you draw samples from, and local law.
+
+### Building a corpus
+
+- **Windows PE files only** (EXE and DLL), a few hundred to a few thousand.
+- **Many families, capped.** At most about 20 samples per family, so a few
+  prolific families do not decide the number. The summary also reports a
+  family-balanced held-out rate: the mean of per-family rates, leaving
+  unlabelled samples out.
+- **Recent, with some history.** Mostly samples first seen in the last one
+  or two years, plus older ones to show drift.
+- **The mix analysts see:** native and .NET, packed and not, EXE and DLL.
+  The summary breaks the rate down along each of these.
+- **A manifest CSV** with a `sha256` column and, where known, `family`,
+  `first_seen` (any format containing the year) and `source`:
+
+  ```csv
+  sha256,family,first_seen,source
+  <64 hex digits>,AgentTesla,2025-03-14,MalwareBazaar
+  ```
+
+  Family labels come from the source's tags and are noisy; say so when you
+  report. The manifest holds hashes only, so it can be committed or shared:
+  anyone with access to the same source can rebuild the corpus.
+
+### Running
+
+The scripts live in the repository, not in the PyPI package.
+
+1. With the VM still online and holding no samples, copy in a checkout and
+   install: `pip install -e .[yara] pyzipper` from the repository root.
+   Take a snapshot.
+2. Cut the network. Attach the corpus (for example as a read-only disk)
+   and run the sweep:
+
+   ```bash
+   python scripts/recall_sweep.py --corpus D:/corpus --manifest D:/corpus/manifest.csv \
+       --out recall_results
+   ```
+
+   It stops before triaging anything if the manifest has no `sha256`
+   column, the engine is older than 0.6.0, or AES archives are present
+   without `pyzipper`; it warns if YARA did not run.
+3. Copy `recall_results/` out, then revert the VM to the snapshot.
+4. Outside, add a benign sweep of the same engine code for the threshold
+   table. The run's split and its copy of the manifest are reused:
+
+   ```bash
+   python scripts/recall_sweep.py --report recall_results/results.jsonl \
+       --benign sweep_results/holdout/results.jsonl --out recall_results
+   ```
+
+### Reading the results
+
+- **Tuning vs held-out.** Every sample is assigned to a tuning part or a
+  held-out part (30%) by its hash, the same way on every run. Quote the
+  held-out row. Every table below it (kinds, families, years, scores,
+  signals, lowest-scoring misses) comes from the tuning part only, so
+  deciding what to change from them does not touch the held-out part. If
+  rules change after held-out misses have been studied anyway, measure on a
+  new corpus or a later time slice.
+- **Samples in both parts can share a family.** The held-out rate is recall
+  on the corpus's own distribution. For new families or builds, measure a
+  corpus first seen after the rules were frozen, where the whole corpus is
+  out of sample.
+- **Unscored PEs.** A PE the engine could not score (the parser rejected it,
+  it crashed or timed out) is a sample the triage failed to flag. The
+  headline rate covers scored samples; the next column counts those
+  failures as misses too. Files without an MZ header are not PE samples and
+  are counted apart.
+- **Signatures.** `triage_bytes()` cannot verify Authenticode (that needs a
+  file on disk), so every signature scores as "unverified", which is 0
+  points. Real verification could move a sample either way: −15 for a valid
+  signature, +30 or more for a tampered or revoked one. The summary reports
+  the rate had every signature been valid.
+- **Threshold table.** With `--benign`, the summary shows detection against
+  the benign flag rate at each score threshold. It warns when the two runs
+  used different engine code or when YARA ran on one side and not the other.
+- **What the rate means.** It is the share of malware PE files a triage
+  pre-filter would send for a closer look (`SUSPICIOUS` or worse). Packed
+  samples top out at `SUSPICIOUS` by design, and .NET samples are the
+  engine's known blind spot, so expect those strata to differ.
+
+### Reporting a number
+
+Give the held-out rate with its 95% interval and counts, the rate counting
+unscored PEs as misses, the family-balanced held-out rate, the corpus
+(source, first-seen range, number of families, native/.NET share), and the
+engine version and code hash from `engine.json`.

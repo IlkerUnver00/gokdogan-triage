@@ -125,35 +125,53 @@ def collect(roots: list[str], max_bytes: int) -> tuple[list[str], dict[str, int]
 
 
 _started_queue = None
+_worker_token = None
+# How long a finished worker's last row may take to arrive before the item it
+# held counts as lost (a worker also exits normally after maxtasksperchild).
+_GRACE_SECONDS = 10.0
 
 
 def _init_worker(started_queue) -> None:
-    global _started_queue
+    global _started_queue, _worker_token
     _started_queue = started_queue
+    # Windows reuses PIDs; this token names one worker process for its life.
+    _worker_token = f"{os.getpid()}-{time.time_ns()}"
+
+
+def report_start(item: str) -> None:
+    """Called by a worker as it starts an item, so the parent can time it out."""
+    if _started_queue is not None:
+        _started_queue.put((_worker_token, os.getpid(), item, time.time()))
+
+
+def report_fields(report, use_yara: bool) -> dict:
+    """The per-file fields every sweep records from a TriageReport."""
+    return dict(
+        # False when YARA was off or could not run (e.g. yara-python missing):
+        # two sweeps compare only if both scored with the same rules.
+        yara=use_yara and report.yara_error is None,
+        sha256=report.file.sha256,
+        size=report.file.size,
+        verdict=report.verdict.value,
+        score=report.score,
+        signature=report.signature.status if report.signature else None,
+        signed=report.file.is_signed,
+        is_dll=report.file.is_dll,
+        dotnet=report.dotnet is not None,
+        packed=report.packer.detected,
+        breakdown=[[e.points, e.reason] for e in report.score_breakdown],
+    )
 
 
 def _triage_one(args: tuple[str, bool]) -> dict:
     path, use_yara = args
-    if _started_queue is not None:
-        # Tell the parent which file this worker is on, so a file that hangs
-        # can be timed out and its worker replaced.
-        _started_queue.put((os.getpid(), path, time.time()))
+    report_start(path)
     started = time.perf_counter()
     row: dict = {"path": path}
     try:
         from gokdogan.engine import triage
 
-        report = triage(path, use_yara=use_yara)
-        row.update(
-            sha256=report.file.sha256,
-            size=report.file.size,
-            verdict=report.verdict.value,
-            score=report.score,
-            signature=report.signature.status if report.signature else None,
-            dotnet=report.dotnet is not None,
-            packed=report.packer.detected,
-            breakdown=[[e.points, e.reason] for e in report.score_breakdown],
-        )
+        row.update(report_fields(triage(path, use_yara=use_yara), use_yara))
     except Exception as exc:  # a parser failure is a result, not a crash
         row.update(error=f"{type(exc).__name__}: {exc}")
     row["seconds"] = round(time.perf_counter() - started, 3)
@@ -161,15 +179,22 @@ def _triage_one(args: tuple[str, bool]) -> dict:
 
 
 def run(paths: list[str], jobs: int, use_yara: bool, out_jsonl: Path,
-        timeout: float = 120.0, exclude_hashes: frozenset[str] = frozenset()) -> list[dict]:
+        timeout: float = 120.0, exclude_hashes: frozenset[str] = frozenset(),
+        worker=_triage_one, extra: tuple = ()) -> list[dict]:
     """Triage paths in a worker pool; a file that runs past `timeout` seconds
     (or kills its worker) becomes an error row instead of stalling the sweep.
-    Rows whose hash is in `exclude_hashes` are kept but marked excluded."""
+    Rows whose hash is in `exclude_hashes` are kept but marked excluded.
+
+    `worker` receives ``(path, use_yara, *extra)``, must call report_start(path)
+    first and return a row whose "path" is that same string (other sweeps,
+    such as recall_sweep.py, plug their own reader in here)."""
     rows: list[dict] = []
     finished: set[str] = set()
+    paths = list(dict.fromkeys(paths))  # a repeated path could never finish twice
     results: queue.Queue = queue.Queue()
     started_q = multiprocessing.Queue()
-    running: dict[int, tuple[str, float]] = {}
+    running: dict[str, tuple[int, str, float]] = {}  # worker token -> (pid, path, start)
+    gone: dict[str, float] = {}  # worker token -> when its process was first missed
     started = time.perf_counter()
     pool = multiprocessing.Pool(jobs, initializer=_init_worker, initargs=(started_q,),
                                 maxtasksperchild=40)
@@ -179,33 +204,42 @@ def run(paths: list[str], jobs: int, use_yara: bool, out_jsonl: Path,
 
     try:
         for p in paths:
-            pool.apply_async(_triage_one, ((p, use_yara),), callback=results.put,
+            pool.apply_async(worker, ((p, use_yara, *extra),), callback=results.put,
                              error_callback=lambda exc, p=p: results.put(
                                  {"path": p, "error": f"{type(exc).__name__}: {exc}"}))
         with out_jsonl.open("w", encoding="utf-8") as sink:
             while len(finished) < len(paths):
-                # Workers are recognised by PID, and Windows reuses PIDs: only a
-                # PID that belongs to a live worker of this pool is trusted.
                 live = {w.pid for w in pool._pool if w.is_alive()}
                 while True:
                     try:
-                        pid, path, t0 = started_q.get_nowait()
+                        token, pid, path, t0 = started_q.get_nowait()
                     except queue.Empty:
                         break
-                    held = running.get(pid)
-                    if held and held[0] != path and held[0] not in finished:
-                        fail(held[0], "worker died on this file")  # PID reused by a new worker
+                    # Another token on this PID: that worker died and Windows
+                    # gave its PID to a new one. The same token starting a new
+                    # item only means its last row is still on the way.
+                    for other, (other_pid, other_path, _) in list(running.items()):
+                        if other != token and other_pid == pid:
+                            del running[other]
+                            gone.pop(other, None)
+                            if other_path not in finished:
+                                fail(other_path, "worker died on this file")
                     if path not in finished:
-                        running[pid] = (path, t0)
+                        running[token] = (pid, path, t0)
                 now = time.time()
-                for pid, (path, t0) in list(running.items()):
+                for token, (pid, path, t0) in list(running.items()):
                     if path in finished:
-                        del running[pid]
+                        del running[token]
+                        gone.pop(token, None)
                     elif pid not in live:
-                        del running[pid]
-                        fail(path, "worker died on this file")
+                        # Exited (a crash, or maxtasksperchild after its last item):
+                        # give a row already sent time to arrive before failing it.
+                        if now - gone.setdefault(token, now) > _GRACE_SECONDS:
+                            del running[token]
+                            gone.pop(token, None)
+                            fail(path, "worker died on this file")
                     elif now - t0 > timeout:
-                        del running[pid]
+                        del running[token]
                         fail(path, f"timeout after {timeout:.0f}s")
                         try:
                             os.kill(pid, signal.SIGTERM)  # the pool starts a replacement
@@ -222,6 +256,8 @@ def run(paths: list[str], jobs: int, use_yara: bool, out_jsonl: Path,
                     row["excluded"] = "same bytes as a file of an excluded run"
                 rows.append(row)
                 sink.write(json.dumps(row) + "\n")
+                if len(rows) % 50 == 0:
+                    sink.flush()  # a killed run keeps what it measured
                 if len(rows) % 250 == 0 or len(rows) == len(paths):
                     rate = len(rows) / (time.perf_counter() - started)
                     print(f"  {len(rows)}/{len(paths)} files, {rate:.1f}/s", file=sys.stderr)

@@ -4,6 +4,36 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`scripts/recall_sweep.py`**: the detection half of the benchmark, for an
+  isolated lab VM. It reads each sample (or password-protected ZIP member,
+  AES with `pyzipper`) into memory with a bounded read and triages it with
+  `triage_bytes()`: nothing is extracted, written or run, bzip2/LZMA members
+  are skipped, and a corpus on a network drive or under a cloud-synced
+  folder is refused. The corpus is split by hash into a tuning and a
+  held-out part. The summary gives held-out detection with 95% intervals,
+  the rate counting PEs the engine could not score as misses, a
+  family-balanced held-out rate, a bound for signatures that cannot be
+  verified from memory, and, from the tuning part only, rates by kind,
+  family and first-seen year, the signals in missed vs detected samples and
+  the lowest-scoring misses. With a benign sweep it adds a
+  detection-vs-false-positive threshold table and warns when the two runs
+  used different engine code or YARA state.
+- **BENCHMARK.md**: how to run and read both sweeps, the lab procedure, and
+  how to build and report on a corpus.
+- Sweep rows record `signed`, `is_dll` and whether YARA ran.
+
+### Fixed
+- `benign_sweep.py`: items that finish quickly were often recorded as
+  "worker died" (138 of 180 fast-failing items in a check), because a
+  worker's next start could overtake its last result. Workers are now
+  tracked by a per-process token, with a grace period for rows in flight.
+  The 0.6.0 numbers are unaffected: those runs had no timeouts or crashes.
+  A path listed twice no longer hangs the sweep, and results are flushed as
+  they arrive.
+
 ## [0.6.0] — 2026-09-26
 
 False positives, measured and cut. A new benchmark script triaged installed
