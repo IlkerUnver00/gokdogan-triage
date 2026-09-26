@@ -62,7 +62,7 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Hashing** | MD5/SHA1/SHA256 + **imphash** + **impfuzzy** + **authentihash** | imphash/impfuzzy cluster by import table; authentihash matches re-signed / signed-vs-unsigned copies of the same binary |
 | **Fuzzy hashing** | **ssdeep** + optional **TLSH** | similarity-preserving: two builds of the same malware score as related even when every crypto hash differs; `--compare` scores a sample against a reference |
 | **Clustering** | `--cluster` groups a dropzone by shared hashes / fuzzy similarity; `--baseline` diffs a sample against a known-good reference | work a folder family-by-family, or answer "is this the real X or a trojanized X?" |
-| **Managed (.NET)** | CLR-header detection: runtime version, flags, obfuscator fingerprints | flags that a sample is .NET (import-based capabilities are blind to managed code) and spots ConfuserEx / .NET Reactor / SmartAssembly |
+| **Managed (.NET)** | CLR header, obfuscator fingerprints, and the metadata (via `dnfile`): the framework members the code references, P/Invoke declarations, and which of them each class's IL calls | a .NET stealer imports only `mscoree`; its metadata shows `SmtpClient.Send`, `Graphics.CopyFromScreen`, `ProtectedData.Unprotect` or `Assembly.Load(byte[])`, and P/Invoke calls feed the native rules (injection, keylogging, anti-debug) |
 | **Rich header** | toolchain **rich_hash** + decoded `@comp.id` entries + checksum validation | fingerprints the exact build environment (more specific than imphash); a bad checksum means a forged/copied header — an anti-clustering tell |
 | **Resource walker** | enumerates `.rsrc`, hashes each leaf, flags **embedded PEs** and **high-entropy blobs** | the dropper/packer's favourite hiding spot; compressed media (PNG, JPEG, GIF, audio, fonts) is recognised by its header and exempt, while archives (ZIP, CAB, 7z, …) stay flagged, since a compressed second stage is what a dropper carries |
 | **Export table** | DLL name, named/ordinal counts, forwarders, launch-mechanism exports (`ReflectiveLoader`, `DllRegisterServer`, `ServiceMain`) | tells you how a DLL expects to be run — reflective beacon, `regsvr32` target, or service host |
@@ -113,7 +113,7 @@ If you already have Python 3.10+, install the published package:
 pip install gokdogan-triage
 ```
 
-This pulls the pure-Python core (`pefile`, `ppdeep`) and the bundled YARA
+This pulls the pure-Python core (`pefile`, `ppdeep`, `dnfile`) and the bundled YARA
 rules, and puts the `gokdogan` command on your PATH. Add optional extras when
 you want them:
 
@@ -129,8 +129,8 @@ pip install "gokdogan-triage[web]"    # FastAPI upload-and-triage service
 pip install -e .[dev]
 ```
 
-Hard dependencies are `pefile` and `ppdeep` (pure-Python ssdeep — no C
-toolchain). Optional: `yara-python` for the YARA stage and `py-tlsh` for
+Hard dependencies are `pefile`, `ppdeep` (pure-Python ssdeep — no C
+toolchain) and `dnfile` (.NET metadata). Optional: `yara-python` for the YARA stage and `py-tlsh` for
 TLSH fuzzy hashing — each degrades to a note in the report when absent.
 
 ```bash
@@ -389,18 +389,28 @@ analysts already rely on, and its edges are worth stating plainly:
   alone can raise a sample to `SUSPICIOUS` at most, never to `HIGH_RISK`; what
   the packed payload does is not analysed. For behaviour, use a sandbox such
   as CAPE.
-- **Not capa.** Capabilities come from import-table and string evidence with
-  minimum hit counts, not from capa's rule engine over disassembled code. capa
-  sees far more: function-level features, .NET metadata, sandbox reports.
+- **Not capa.** Capabilities come from import-table, .NET metadata and string
+  evidence with minimum hit counts, not from capa's rule engine over
+  disassembled code. capa sees far more: function-level features, argument
+  values, sandbox reports.
 - **Not FLOSS.** Encoded-string recovery covers single-byte XOR/ADD/ROL,
   Base64/hex and simple stack strings. It does not emulate decoding routines
   the way FLOSS does.
 - **Not Detect It Easy or PEStudio.** Packer and compiler identification is
   shallower than DIE's signature database, and PEStudio shows more indicators
   interactively.
-- **.NET is a blind spot.** Managed assemblies and common obfuscators are
-  detected, but import-based capability analysis sees nothing inside managed
-  code.
+- **.NET is read from metadata, not from behaviour.** The rules see which
+  framework members and native functions an assembly references and which
+  of them its IL calls, class by class. They do not see a call made by
+  reflection on a name built at runtime (`Type.GetType("System.Net." + x)`),
+  `dynamic` or VB late binding, D/Invoke-style function pointers, or code in
+  a payload decrypted at runtime. Framework libraries that implement the
+  risky APIs themselves (event-log clearing, keyboard hooks) can score
+  `SUSPICIOUS`: of 822 files sampled from `C:\Windows\Microsoft.NET`, the
+  runtime's own folder, 2.1% are flagged (1.0% without this stage), almost
+  all core Microsoft-signed assemblies such as `System.dll` and
+  `System.Core.dll`, held there by the rule that a valid signature never
+  clears a severity-3 tag; the PowerShell engine scores `HIGH_RISK`.
 - **False positives are measured on one machine; recall is not measured.**
   [`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
   files and counts every verdict above `LIKELY_CLEAN` as a false positive
@@ -413,7 +423,8 @@ analysts already rely on, and its edges are worth stating plainly:
   flatter the engine, because the rules were fitted to the same files. The estimate to
   quote comes from a second sample of 2,694 other files from the same
   machine that played no part in tuning: v0.5.2 12.7% / 2.2%, this release
-  2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%). On
+  2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%); with
+  the .NET stage added since, 2.2% / 0.22% (60 and 6 files). On
   native PE files, which the import-based rules actually analyse, it is
   3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
   The machine is not a typical workload: most third-party files come from

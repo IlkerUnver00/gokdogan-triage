@@ -1,7 +1,7 @@
 """Benign false-positive sweep.
 
-Triage every PE under the given directories (default: this machine's System32
-and Program Files), treat each one as benign, and report how often the verdict
+Triage every PE under the given directories (default: this machine's System32,
+Program Files and the .NET runtime folder), treat each one as benign, and report how often the verdict
 says otherwise and which signals are responsible. That measures one half of a
 benchmark, the false-positive rate. Recall needs a labelled malware corpus
 handled in an isolated lab, which this script deliberately never touches.
@@ -40,6 +40,7 @@ DEFAULT_ROOTS = [
     r"C:\Windows\System32",
     r"C:\Program Files",
     r"C:\Program Files (x86)",
+    r"C:\Windows\Microsoft.NET",  # the .NET runtime and GAC: every .NET rule must see it
 ]
 PE_EXTENSIONS = (".exe", ".dll", ".sys", ".ocx", ".cpl", ".scr", ".drv", ".efi")
 SUSPICIOUS, HIGH_RISK = 30, 60

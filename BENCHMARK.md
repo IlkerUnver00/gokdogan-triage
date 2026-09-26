@@ -128,8 +128,9 @@ The scripts live in the repository, not in the PyPI package.
   used different engine code or when YARA ran on one side and not the other.
 - **What the rate means.** It is the share of malware PE files a triage
   pre-filter would send for a closer look (`SUSPICIOUS` or worse). Packed
-  samples top out at `SUSPICIOUS` by design, and .NET samples are the
-  engine's known blind spot, so expect those strata to differ.
+  samples top out at `SUSPICIOUS` by design, and .NET samples are read from
+  metadata only (see README, "What gokdogan does not do"), so expect those
+  strata to differ.
 
 ### Reporting a number
 

@@ -135,7 +135,11 @@ def render_html(report: TriageReport) -> str:
         flags = f" [{_esc(', '.join(dn.flags))}]" if dn.flags else ""
         obf = (f' <span class="flagline">obfuscator: {_esc(", ".join(dn.obfuscators))}</span>'
                if dn.obfuscators else "")
-        ident.append((".NET", f"managed, CLR {_esc(dn.runtime_version)}{flags}{obf}"))
+        meta = (f' <span class="flagline">metadata unreadable: {_esc(dn.metadata_error)}</span>'
+                if dn.metadata_error else
+                f" · {dn.member_refs} member references, {dn.pinvoke_count} P/Invoke"
+                + (f" ({dn.pinvoke_called} called)" if dn.pinvoke_called is not None else ""))
+        ident.append((".NET", f"managed, CLR {_esc(dn.runtime_version)}{flags}{obf}{meta}"))
     parts.append("<h2>File</h2><div class='card'><dl class='grid'>")
     parts.append("".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in ident))
     parts.append("</dl></div>")

@@ -11,7 +11,7 @@ bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 - 31 odaklı modülde **~5.200 satır** Python
 - **~2.950 satır** test · **256 test** · gerçek binary entegrasyon paketi
 - Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %2,2'si işaretleniyor (v0.5.2'de %12,7)
-- Zorunlu bağımlılık: `pefile`, `ppdeep` · opsiyonel: `yara-python`, `py-tlsh`
+- Zorunlu bağımlılık: `pefile`, `ppdeep`, `dnfile` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için
 [README.md](README.md).
@@ -89,7 +89,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 - [`resources.py`](gokdogan/resources.py) — `.rsrc` gezici: gömülü PE, yüksek-entropi blob
 - [`overlay.py`](gokdogan/overlay.py) — overlay içeriği: magic-byte tip, entropi, gömülü PE
 - [`signature.py`](gokdogan/signature.py) — Authenticode doğrulama (WinVerifyTrust) + sertifika adları
-- [`dotnet.py`](gokdogan/dotnet.py) — managed/.NET CLR-header tespiti + obfuscator parmak izleri
+- [`dotnet.py`](gokdogan/dotnet.py) — .NET: CLR başlığı, obfuscator'lar, metadata referansları, P/Invoke ve IL çağrı noktaları (dnfile)
 
 **İçerik**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE çıkarma + IOC sınıflandırma
@@ -127,7 +127,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 | **Kimlik / kümeleme** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
 | **Yapı** | bölüm + genel entropi, entropi adaları, packer tespiti, W+X bölümler, TLS callback, aşırı overlay, silinmiş/gelecek timestamp, checksum uyuşmazlığı |
 | **İçerik** | sınıflandırılmış IOC string (URL/IP/domain/registry/PDB/komut/UA), XOR/ADD/ROL/base64/hex-kurtarılmış string, gömülü PE, şifreli-config blob |
-| **Davranış** | import + delay-import + export capability'leri (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) minimum isabet sayısıyla |
+| **Davranış** | import + delay-import + export + .NET metadata/P/Invoke capability'leri (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) minimum isabet sayısıyla |
 | **İstihbarat** | MITRE ATT&CK teknik eşlemesi (taktik bazlı), YARA, opt-in reputation |
 
 ---
@@ -245,7 +245,7 @@ etiketli bir korpus gerektirir ve henüz ölçülmedi.
 
 ## 8. Teknoloji yığını
 
-Python 3.10+ · `pefile` (PE parse) · `ppdeep` (saf-Python ssdeep) · opsiyonel
+Python 3.10+ · `pefile` (PE parse) · `ppdeep` (saf-Python ssdeep) · `dnfile` (.NET metadata) · opsiyonel
 `yara-python`, `py-tlsh` · reputation için standart kütüphane `urllib`. Web
 framework yok, ağır bağımlılık yok — malware-lab akışına giren, kendi kendine
 yeten bir CLI.

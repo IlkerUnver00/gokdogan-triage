@@ -8,7 +8,7 @@ from .attack import build_attack_summary
 from .blobs import find_config_blobs
 from .capabilities import infer_capabilities
 from .decoded import recover_encoded_strings
-from .dotnet import analyze_dotnet
+from .dotnet import analyze_dotnet, read_references
 from .entropy import shannon_entropy
 from .exports import parse_exports
 from .extractors import extract_config
@@ -108,9 +108,33 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
         anomalies.append(f".NET obfuscator detected: {', '.join(dotnet.obfuscators)}")
 
     # Delay-loaded APIs count for capability inference just like normal ones.
-    merged_imports = dict(imports)
+    merged_imports = {dll: list(names) for dll, names in imports.items()}
     for dll, names in delay.items():
         merged_imports.setdefault(dll, []).extend(names)
+
+    # .NET: what the managed code calls. P/Invoke functions are native imports
+    # in all but name, so they join the import table for the rules: the ones
+    # the IL calls when it can be read, every declaration when it cannot.
+    managed_refs = pinvoke = managed_classes = None
+    if dotnet is not None:
+        refs = read_references(data)
+        managed_refs = refs.members
+        pinvoke = refs.called if refs.precise else refs.declared
+        managed_classes = refs.classes if refs.precise else None
+        declared = sorted({f"{dll}!{fn}" for dll, fns in refs.declared.items() for fn in fns})
+        dotnet.pinvoke, dotnet.pinvoke_count = declared[:500], len(declared)
+        dotnet.pinvoke_called = (sum(len(set(v)) for v in refs.called.values())
+                                 if refs.precise else None)
+        dotnet.member_refs = refs.member_refs
+        dotnet.metadata_error = refs.error
+        for dll, names in pinvoke.items():
+            merged_imports.setdefault(dll, []).extend(names)
+        # Malformed metadata the runtime never touches costs an author
+        # nothing and blinds this stage, so it is itself a signal.
+        if refs.error:
+            anomalies.append(f".NET metadata unreadable ({refs.error})")
+        elif refs.bad_rows:
+            anomalies.append(f".NET metadata has {refs.bad_rows} malformed rows")
 
     import_count = sum(len(v) for v in merged_imports.values())
     packer = detect_packer(sections, import_count, is_dotnet=managed)
@@ -118,7 +142,8 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
     decoded_strings = recover_encoded_strings(data) + stack_strings
     config_extractions = extract_config(data, [d.value for d in decoded_strings])
     capabilities = infer_capabilities(
-        merged_imports, string_hits, resources, exports, decoded_strings, config_blobs, overlay
+        merged_imports, string_hits, resources, exports, decoded_strings, config_blobs, overlay,
+        managed=managed_refs, pinvoke=pinvoke, managed_classes=managed_classes,
     )
 
     if use_yara:

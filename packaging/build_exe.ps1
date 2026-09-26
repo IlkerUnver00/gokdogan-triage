@@ -3,7 +3,7 @@
 #   .\packaging\build_exe.ps1
 #
 # Output: dist\gokdogan.exe — runs on any 64-bit Windows machine with no
-# Python installed. Python, pefile, ppdeep, yara-python and the bundled YARA
+# Python installed. Python, pefile, ppdeep, dnfile, yara-python and the bundled YARA
 # rules are all embedded. The optional web service is not included (it is a
 # separate `pip install ".[web]"` concern, not a CLI feature).
 # NOTE: PyInstaller logs INFO lines to stderr. Under Windows PowerShell 5.1

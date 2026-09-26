@@ -7,6 +7,38 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **.NET analysis stage.** A managed assembly imports almost nothing native,
+  so its behaviour is now read from its metadata with `dnfile` (a new hard
+  dependency: pure Python, MIT): the framework members it references, the
+  native functions it declares through P/Invoke, and, from the IL, which of
+  them each class actually calls.
+  - P/Invoke functions the code calls go through the native rules, so a C#
+    injector, keylogger or anti-debug check is tagged like a native one
+    (bare `SetWindowsHookEx`-style names match the A/W rules).
+  - New managed rules: network, download-and-run, loading an assembly from
+    memory (`Assembly.Load(byte[])`, recognised from the method signature),
+    screenshots, clipboard, SMTP exfiltration (`email-exfiltration`),
+    registry writes, symmetric crypto, DPAPI decryption (`credential-access`)
+    and in-process shellcode runners (`shellcode-execution`).
+  - Two-part rules (download-and-run, load-from-memory, shellcode) need both
+    parts in one class when the IL can be read: a framework library that
+    downloads in one place and starts processes in another is not a
+    downloader. If the IL cannot be tied to calls (an obfuscator, or
+    references resolved at runtime), rules read every declaration instead.
+  - Native and .NET evidence for one behaviour is one capability.
+  - Metadata that cannot be read, or declares tables larger than its own
+    stream, is an anomaly: it costs an author nothing and would blind the
+    stage. Each such case is refused before `dnfile` builds a row for it.
+  - Reports show member references and P/Invoke declared and called.
+  - Measured on the same benign samples: native files are unchanged. On
+    the held-out sample, .NET assemblies flagged went from 0.25% to 0.51%
+    (overall 2.15% to 2.23%; `HIGH_RISK` from 4 to 6 files), and on the
+    tuning sample from 0.11% to 1.00%. The runtime's own folder,
+    `C:\Windows\Microsoft.NET` (822 files, in neither sample), went from
+    0.97% to 2.07%: core framework assemblies such as `System.dll` and
+    `System.Core.dll` implement the risky APIs themselves and stay at
+    `SUSPICIOUS` through the valid-signature floor, and the PowerShell
+    engine is `HIGH_RISK`. `benign_sweep.py` now samples that folder too.
 - **`scripts/recall_sweep.py`**: the detection half of the benchmark, for an
   isolated lab VM. It reads each sample (or password-protected ZIP member,
   AES with `pyzipper`) into memory with a bounded read and triages it with

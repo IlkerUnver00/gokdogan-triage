@@ -37,7 +37,7 @@ _PACKING_CAP = SUSPICIOUS_THRESHOLD
 # kept out of the count (loader.distinct_import_count).
 _COMMON_CAP = 16
 _LARGE_IMPORT_TABLE = 200
-_STRUCTURAL_SOURCES = {"imports", "exports"}
+_STRUCTURAL_SOURCES = {"imports", "exports", "managed"}
 
 # Signals too common in benign software to carry full weight. TLS callbacks
 # were present in 25% of the benign sweep (C++ thread_local, runtime init) and

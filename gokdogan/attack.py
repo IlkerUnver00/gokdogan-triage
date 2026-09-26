@@ -65,6 +65,9 @@ TECHNIQUES: dict[str, tuple[str, str]] = {
     "T1070.001": ("Indicator Removal: Clear Windows Event Logs", "Defense Evasion"),
     "T1490": ("Inhibit System Recovery", "Impact"),
     "T1048": ("Exfiltration Over Alternative Protocol", "Exfiltration"),
+    "T1048.003": ("Exfiltration Over Unencrypted Non-C2 Protocol", "Exfiltration"),
+    "T1071.003": ("Application Layer Protocol: Mail Protocols", "Command and Control"),
+    "T1555": ("Credentials from Password Stores", "Credential Access"),
 }
 
 # capability name -> technique ids it implies.
@@ -92,6 +95,9 @@ CAPABILITY_ATTACK: dict[str, list[str]] = {
     "dynamic-api-resolution": ["T1027.007"],
     "anti-forensics": ["T1070.001"],
     "anti-recovery": ["T1490"],
+    "email-exfiltration": ["T1071.003", "T1048.003"],
+    "credential-access": ["T1555"],
+    "shellcode-execution": ["T1620"],
     # string/YARA-derived pseudo-capabilities (also matched against YARA tags):
     "packer": ["T1027.002"],
     "ransomware": ["T1486"],
