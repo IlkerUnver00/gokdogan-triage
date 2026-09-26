@@ -8,8 +8,9 @@
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
-- 31 odaklı modülde **~4.900 satır** Python
-- **~2.400 satır** test · **207 test** · gerçek binary entegrasyon paketi
+- 31 odaklı modülde **~5.200 satır** Python
+- **~2.950 satır** test · **256 test** · gerçek binary entegrasyon paketi
+- Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %2,2'si işaretleniyor (v0.5.2'de %12,7)
 - Zorunlu bağımlılık: `pefile`, `ppdeep` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için
@@ -27,7 +28,7 @@ etrafında düzenlendi.
 | **Saf fonksiyonlar → dataclass'lar** | Her analizci, `bytes`/`pefile.PE` üzerinde çalışıp dataclass döndüren saf bir fonksiyondur ([`models.py`](gokdogan/models.py)). Analizciler birbirini ya da çıktı formatını tanımaz. Yeni aşama eklemek = bir modül + [`engine.py`](gokdogan/engine.py)'de bir satır. |
 | **Varsayılan çevrimdışı** | `triage()` çekirdeği asla ağa dokunmaz, örneği asla çalıştırmaz. Tek çevrimiçi özellik (reputation) opt-in, yalnızca-hash ve CLI katmanındadır — böylece analiz çekirdeği air-gapped bir malware iş istasyonunda güvenlidir. |
 | **Denetlenebilir verdikt** | Skorun kendisi rapordur: her puan okunur bir gerekçe taşır ([`verdict.py`](gokdogan/verdict.py)). Analistin itiraz edemeyeceği gizli bir model yoktur. |
-| **Yanlış-pozitife karşı kalibre** | Eşikler, tahminle değil, stok imzalı Windows binary'lerine karşı ampirik olarak ayarlandı. Capability kuralları minimum sayıda farklı API isabeti ister; entropi adaları yalnızca yazılabilir bölümlerde tetiklenir; sıkıştırılmış ikon kaynakları beyaz listededir. |
+| **Yanlış-pozitife karşı kalibre, tek makinede** | Ağırlıklar, bir iş istasyonundaki 2.888 yüklü PE dosyasından rastgele bir örneklem triyaj edilip zararsız yazılımın aldığı verdiktlerin nedenleri giderilerek belirlendi ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)); sonuç aynı makineden ayrı, ayarlamada kullanılmamış ikinci bir örneklemde denetlendi. Capability kuralları yalnızca genel API sayısı değil, belirli API'ler ister; entropi adaları yalnızca yazılabilir bölümlerde tetiklenir; sıkıştırılmış medya kaynakları başlıklarından tanınır. |
 | **Zarif düşüş** | Eksik YARA, eksik kural, bozuk kaynak ağacı, çözümlenemeyen import tablosu — her biri çökme değil, raporda bir nota dönüşür. |
 
 ---
@@ -153,9 +154,24 @@ götürdü. ([`blobs.py`](gokdogan/blobs.py))
 **Yanlış-pozitifler el sallamayla değil kalibrasyonla giderildi.** Config-blob
 tespiti 150 stok imzalı sistem binary'sinde tarandı; salt-okunur `.rdata`
 meşru olarak yüksek-entropili sertifika verisi taşır, bu yüzden tarama
-yazılabilir bölümlerle sınırlandı → **0 yanlış-pozitif**. Aynı disiplin kaynak
-gezicide sıkıştırılmış PNG ikonları beyaz listeler ve bir capability
-tetiklenmeden önce minimum farklı API isabeti ister.
+yazılabilir bölümlerle sınırlandı → **o 150 dosyada 0 yanlış-pozitif** (aşağıdaki
+geniş zararsız taramada entropi adası dosyaların %1'inde yine çıkıyor). Aynı
+disiplin kaynak gezicide sıkıştırılmış medyayı başlığından tanır ve bir
+capability tetiklenmeden önce belirli API'ler ister.
+
+**Yanlış-pozitifler önce ölçüldü, sonra kaynağında giderildi.** v0.5.2, bir iş
+istasyonundaki 2.888 yüklü PE dosyasının %11,8'ini `SUSPICIOUS` veya üstü
+buluyordu. [`scripts/benign_sweep.py`](scripts/benign_sweep.py), zararsız
+dosyalarda hangi skor gerekçelerinin tetiklendiğini ve işaretlenen dosyalarda
+kaç puan taşıdığını çıkarır; her düzeltme tek bir nedene gitti: sahte tarih
+sanılan reproducible-build zaman damgaları (dosyaların %58'i), her MSVC
+çalışma zamanının bağladığı debugger kontrolleri, keylogging sanılan GUI
+klavye çağrıları, bir capability ile bir YARA kuralının aynı kanıtı iki kez
+sayması ve büyük programlarda yaygın davranış etiketlerinin toplanması. Her
+aday kural devreye girmeden önce bu dosyalarda fiyatlandı; sentetik,
+malware biçimli raporlar da tespitin kaybolmasına karşı koruma sağlar.
+Ayarlamada kullanılmamış 2.694 başka dosyada oran %12,7'den %2,2'ye indi.
+([`verdict.py`](gokdogan/verdict.py), [`capabilities.py`](gokdogan/capabilities.py))
 
 **Aracın kendisinin güvenliği.** Malware string'leri markup içerebilir; HTML
 raporu her sample-türevli değeri `html.escape`'ten geçirir, böylece bir rapor
@@ -177,20 +193,23 @@ Varsayılan kapalıdır, yalnızca SHA-256 gönderir (asla dosya), anahtarsız
        alt="gokdogan verdikt modeli: LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spektrumu, eşikler ve temsili toplamsal ağırlıklar">
 </p>
 
-Skorlama bilinçli olarak şeffaf ve toplamsaldır; tablonun son satırları iki
-korkuluğu gösterir. Temsili ağırlıklar:
+Skorlama bilinçli olarak şeffaf ve toplamsaldır; tablonun son satırları
+korkulukları gösterir. Temsili ağırlıklar:
 
 | Sinyal | Puan |
 |---|---|
 | Packer tespit edildi | +15 |
 | Yüksek genel entropi (≥ 7,0) | +10 |
-| Her yapısal anomali | +6 |
+| Her yapısal anomali | +6 (TLS callback +2) |
 | Capability (şiddet 1 / 2 / 3) | +2 / +8 / +18 |
 | YARA eşleşmesi | kural `meta.weight`, varsayılan +15 |
+| Ağ IOC string'leri | her biri +1, en fazla +5 |
 | Kurtarılmış kodlu IOC/payload | +24'e kadar |
 | Geçerli Authenticode imzası | −15; sertifika tablosunda doğrulanmamış veri varsa 0 |
 | İmza var ama geçerli değil (self-signed, süresi dolmuş, doğrulanmamış) | 0 |
 | Paketleme sinyalleri birlikte (packer, entropi, packer YARA, stub anomalileri) | en fazla 30 |
+| Import/export'tan okunan şiddet 1–2 capability'ler, ≥ 200 fonksiyon import eden dosyada | birlikte en fazla 16 |
+| `meta.overlaps` ile adı verilen capability ile aynı eşleşen metni okuyan YARA kuralı | yalnızca o capability'nin puanını aşan kısım |
 
 Eşikler: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. Tam döküm her raporda
 basılır — analist bir örneğin neden o skoru aldığını tam olarak görür ve YARA
@@ -202,18 +221,25 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**207 test / ~2.400 satır.** Birim testleri her analizciyi sentetik girdilerle
+**256 test / ~2.950 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
-ekilmiş entropi adaları, sentetik sertifika tabloları). Entegrasyon paketi tüm
-boru hattını gerçek sistem binary'lerine (`notepad.exe`, `kernel32.dll`) karşı
-çalıştırır ve bunların asla `HIGH_RISK` almadığını, dropper / gömülü-config /
-hayali-string yanlış-pozitiflerine takılmadığını doğrular. Bilinen iki yanlış
-pozitif bilerek görünür tutulur (`xfail` testleri): stok `mmc.exe` ve
-geçerli imzalı `chrome.exe` `HIGH_RISK` çıkar; çünkü büyük meşru programlar,
-birkaç yetenek kuralının üst üste binmesine yetecek kadar API içe aktarır. Bu,
-iki dosyaya göre elle ayarlanacak bir şey değil, ölçülmüş bir benchmark'la
-çözülecek bir kalibrasyon sorunudur. Ağ kodu enjekte HTTP mock'larıyla test
-edilir — gerçek dış çağrı yoktur.
+ekilmiş entropi adaları, sentetik sertifika tabloları, sınıflandırmayı bir
+zamanlar karesel yapan düşmanca string'ler). Entegrasyon paketi tüm boru
+hattını gerçek sistem binary'lerine (`notepad.exe`, `kernel32.dll`, `mmc.exe`
+ve varsa imzalı `chrome.exe`) karşı çalıştırır ve hiçbirinin `HIGH_RISK`
+almadığını doğrular; v0.5.2'de `mmc.exe` ve `chrome.exe` alıyordu (83 ve 79).
+Tespit koruması ([`tests/archetypes.py`](tests/archetypes.py)) on iki
+sentetik, malware biçimli raporu skorlar ve kalibrasyon herhangi birini
+v0.5.2'nin verdiği verdiktin altına düşürürse başarısız olur (belgelenmiş
+tek bir istisna ile). Ağ kodu enjekte HTTP mock'larıyla test edilir — gerçek
+dış çağrı yoktur.
+
+Yanlış-pozitif benchmark'ı `pytest`'in parçası değil, ayrı bir betiktir:
+[`scripts/benign_sweep.py`](scripts/benign_sweep.py) yüklü PE dosyalarını
+triyaj eder, her birini zararsız sayar ve işaretleme oranını, arkasındaki
+gerekçeleri ve en kötü dosyaları raporlar. Benchmark'ın yalnızca zararsız
+yarısını ölçer; gerçek malware üzerinde recall, izole bir laboratuvarda
+etiketli bir korpus gerektirir ve henüz ölçülmedi.
 
 ---
 

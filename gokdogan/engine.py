@@ -18,10 +18,12 @@ from .loader import (
     build_file_info,
     build_sections,
     delay_imported_functions,
+    distinct_import_count,
     find_anomalies,
     imported_functions,
     is_managed,
     load_pe,
+    parse_pe,
 )
 from .models import SignatureInfo, TriageReport
 from .overlay import analyze_overlay, overlay_anomalies
@@ -34,7 +36,7 @@ from .strings_ext import analyze_strings
 from .verdict import score_report
 from .yara_scan import scan as yara_scan
 
-__all__ = ["triage", "NotAPEError"]
+__all__ = ["triage", "triage_bytes", "NotAPEError"]
 
 
 def triage(
@@ -46,6 +48,28 @@ def triage(
 ) -> TriageReport:
     """Run the full static triage pipeline on one PE file."""
     pe, data = load_pe(path)
+    return _triage(pe, data, path, rules_dir, min_string_length, use_yara,
+                   verify_signature)
+
+
+def triage_bytes(
+    data: bytes,
+    name: str = "<memory>",
+    rules_dir: str | Path | None = None,
+    min_string_length: int = 6,
+    use_yara: bool = True,
+) -> TriageReport:
+    """Triage PE bytes that are not on disk (an upload, a carved file, a test).
+
+    Authenticode verification needs a file, so a signature is reported as
+    present but unverified.
+    """
+    return _triage(parse_pe(data, name), data, name, rules_dir, min_string_length, use_yara,
+                   verify_signature=False)
+
+
+def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int,
+            use_yara: bool, verify_signature: bool) -> TriageReport:
     try:
         file_info = build_file_info(path, pe, data)
         dotnet = analyze_dotnet(pe, data)
@@ -115,6 +139,7 @@ def triage(
         config_blobs=config_blobs,
         exports=exports,
         delay_imports=sorted(delay.keys()),
+        import_count=distinct_import_count(imports),
         overall_entropy=round(shannon_entropy(data), 3),
         packer=packer,
         anomalies=anomalies,

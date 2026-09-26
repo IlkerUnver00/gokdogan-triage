@@ -4,6 +4,113 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — 0.6.0
+
+False positives, measured and cut. A new benchmark script triaged installed
+software on one workstation and counted every verdict above `LIKELY_CLEAN`
+as a false positive. Each change below removes a cause it found, was priced
+on the same benign files before it went in, and was attacked by independent
+reviewers for lost detection; their findings are fixed and are now tests.
+
+| Benign PE files, one Windows 11 machine | v0.5.2 | this release |
+|---|---:|---:|
+| Tuning sample (2,887 files): `SUSPICIOUS` or worse | 11.8% (341) | 2.0% (58) |
+| Tuning sample: `HIGH_RISK` | 1.9% (56) | 0.1% (3) |
+| Held-out sample (2,694 other files): `SUSPICIOUS` or worse | 12.7% (341) | 2.2% (59) |
+| Held-out sample: `HIGH_RISK` | 2.2% (59) | 0.15% (4) |
+
+The held-out files played no part in tuning, so that row is the estimate to
+quote (95% interval 1.7–2.8%; native PE files alone 17.7% → 3.0%). No file
+clean at v0.5.2 is flagged now, in either sample. It is one machine's
+software, and only the benign half of a benchmark:
+recall on real malware is still unmeasured (see README, "What gokdogan does
+not do").
+
+### Added
+- **`scripts/benign_sweep.py`**: the false-positive benchmark. It sweeps PE
+  files (or a seeded random sample), in parallel with a per-file timeout, and
+  writes per-file results, a signal table (which reasons fire on benign
+  files, and how many points they carry in flagged ones) and the worst files.
+  `--paths-from` re-scores exactly the files of an earlier run,
+  `--exclude-results` draws a held-out sample, and `--engine` pins the code
+  under test; the engine's code hash and the arguments are recorded.
+- **Detection guard** (`tests/archetypes.py`): twelve synthetic
+  malware-shaped reports whose verdicts may not fall below what v0.5.2 gave
+  them, with one documented exception (below).
+- `triage_bytes()` triages PE bytes that are not on disk.
+- JSON output: `import_count` on the report, `source` on each capability
+  (imports, exports, strings, decoded, resources, sections), `matched` text
+  on each YARA hit.
+
+### Changed — scoring
+- **Common capabilities in large programs are capped.** In a file that
+  imports 200 or more distinct functions, the severity 1–2 tags read from
+  imports and exports (network, crypto, registry, screen, clipboard,
+  privileges, services, …) count at most 16 points together. They were the
+  main source of false positives: a program that large has them all. Below
+  200 imports, and for severity-3 tags and tags read from content, nothing
+  changes. Duplicate and delay-load imports do not count towards the 200;
+  a sample that links 200 real functions still gets the cap (a known limit).
+- **One fact counts once.** A YARA rule whose `meta.overlaps` names a
+  capability that fired on the same matched text adds only what its weight
+  exceeds the capability's points by (`Injection_API_Cluster` vs
+  `process-injection`, `Shadow_Copy_Deletion` vs `anti-recovery`). A rule
+  that matched other text (injection APIs resolved by name, not imported)
+  counts in full.
+- **Capability rules need specific APIs.** `anti-debug` needs
+  `CheckRemoteDebuggerPresent` or `NtQueryInformationProcess`: the timing and
+  `IsDebuggerPresent` calls it used to count are linked into every MSVC
+  program. `keylogging` needs a capture mechanism (hook, async polling, raw
+  input) plus a second one, a keyboard-state read or a key-to-character
+  translation; `GetKeyState` and `MapVirtualKey` alone are ordinary GUI code.
+  The ANSI and wide variants of one function count once.
+- `persistence-registry` from registry-write imports alone is severity 1
+  (still 3 with Run-key strings). The export-derived `regsvr32-loadable` and
+  `service-dll` tags are severity 1: every COM server and service DLL has them.
+- TLS callbacks count 2 points instead of 6 (present in 25% of benign files);
+  network IOC strings count at most 5 instead of 10 (present in 52%).
+- **Commands.** A string counts as a command when the invocation is
+  suspicious: encoded or hidden PowerShell (any prefix of `-EncodedCommand`,
+  `-WindowStyle`, `-ExecutionPolicy`), Defender exclusions, `certutil`
+  decode/download, `bitsadmin` transfers, `regsvr32 /i:`, `mshta` with a URL
+  or script, `rundll32`/`regsvr32`/`wscript` run from a user-writable folder,
+  `schtasks /create`, `sc create`, `net user … /add`, backup and log
+  destruction (`vssadmin`, `wmic shadowcopy`, `bcdedit`, `wbadmin`,
+  `wevtutil`), with or without `.exe` and a full path. A tool that is merely
+  named (`C:\Windows\System32\rundll32.exe`) is a new `lolbin` category:
+  shown, not scored.
+
+### Fixed
+- **Reproducible builds.** A `/Brepro` binary stores a hash where the link
+  time would be, so it read as "compiled in the future" or "before the PE
+  era": timestamp anomalies fell from 62% to 4% of the benign files. Such a
+  stamp is now shown as a hash and not flagged; a zero stamp is flagged
+  whatever the debug directory says.
+- **Resources.** Media resources are recognised by their header, whatever
+  type they are filed under (MFC and Office keep hundreds of PNGs under a
+  custom type): one DLL scored 2,363 from them. Archives (ZIP, CAB, gzip, 7z,
+  bzip2, xz) stay flagged. Resource anomalies are one note per kind, not one
+  per resource.
+- **Stager URLs** stop at the first binary byte instead of running through
+  NULs into the next string, and a bare host prefix (a paste id appended at
+  runtime) is still extracted.
+- **Classification cost is linear.** The command patterns bound every gap,
+  and encoded-string recovery classifies each printable run once, so a long
+  hostile string cannot stall triage.
+- The integration tests on `mmc.exe` and a signed `chrome.exe`, kept as
+  known false positives (`xfail`) in 0.5.2, now pass as ordinary tests:
+  `mmc.exe` scores 18 (`LIKELY_CLEAN`, was `HIGH_RISK` 83) and `chrome.exe` 30
+  (`SUSPICIOUS`, held there by the signature floor; was `HIGH_RISK` 79).
+
+### Known trade-off
+- A ransomware sample whose only plaintext tell is one shadow-copy command
+  (its note encrypted) is now `SUSPICIOUS` rather than `HIGH_RISK`: at
+  v0.5.2 the capability and the YARA rule read that same command and were
+  added up. The detection guard records this as its one lowered floor.
+
+### Tests
+- 207 → 256 tests. The benchmark is a script, not part of `pytest`.
+
 ## [0.5.2] — 2026-09-24
 
 Credibility pass: correctness fixes an expert reviewer would catch, hardening

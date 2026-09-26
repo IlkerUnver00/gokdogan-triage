@@ -102,7 +102,8 @@ def test_valid_signature_over_padded_cert_table_earns_no_credit():
     score_report(base)
     score_report(signed)
     assert signed.score == base.score
-    assert not any(e.points < 0 for e in signed.score_breakdown)
+    assert not any(e.points < 0 and e.reason.startswith("Authenticode")
+                   for e in signed.score_breakdown)
 
 
 def test_valid_signature_mitigates_more():
@@ -203,8 +204,8 @@ def test_packing_cap_leaves_behavioural_evidence_alone():
                             anomalies=["section 'UPX0': W+X", "TLS callbacks present"])
     score_report(report)
     # packing group 15+10+6+12 = 43 -> capped at 30; injection 18 and the TLS
-    # anomaly 6 are not packing signals and still count in full.
-    assert report.score == SUSPICIOUS_THRESHOLD + 18 + 6
+    # anomaly (a weak signal, 2) are not packing signals and count in full.
+    assert report.score == SUSPICIOUS_THRESHOLD + 18 + 2
     assert report.score < HIGH_RISK_THRESHOLD
 
 
@@ -248,3 +249,93 @@ def test_attacker_named_resource_is_not_swallowed_by_the_packing_cap():
     score_report(report)
     # packing 61 is capped at 30; the dropper anomaly still counts in full
     assert report.score == SUSPICIOUS_THRESHOLD + 6
+
+
+def _common_caps():
+    return [Capability(n, "", 2, []) for n in (
+        "network", "crypto", "screen-capture", "clipboard-access", "privilege-manipulation",
+        "persistence-service")] + [Capability(n, "", 1, []) for n in (
+        "execution", "dynamic-api-resolution")]
+
+
+def test_common_capabilities_of_a_large_program_are_capped():
+    report = TriageReport(file=_file_info(), import_count=900, capabilities=_common_caps() + [
+        Capability("process-injection", "", 3, []),
+        Capability("string-obfuscation", "", 2, [], source="decoded"),
+        Capability("persistence-registry", "", 2, [], source="strings")])
+    score_report(report)
+    # 6 x 8 + 2 x 2 = 52 common points -> 16; injection 18, obfuscation 8 and
+    # the Run-key strings 8 are not import evidence and count in full
+    assert report.score == 16 + 18 + 8 + 8
+    assert any(e.reason.startswith("cap: common capabilities") for e in report.score_breakdown)
+
+
+def test_common_capabilities_of_a_small_program_count_in_full():
+    # Thirty imports carrying eight behaviours is not explained by size.
+    report = TriageReport(file=_file_info(), import_count=30, capabilities=_common_caps())
+    score_report(report)
+    assert report.score == 52
+    assert not any(e.reason.startswith("cap:") for e in report.score_breakdown)
+
+
+def _injection_cluster(matched):
+    return YaraHit(rule="Injection_API_Cluster", tags=["injection"],
+                   meta={"weight": 15, "overlaps": "process-injection"}, matched=matched)
+
+
+_TRIO = ["VirtualAllocEx", "WriteProcessMemory", "CreateRemoteThread"]
+
+
+def test_yara_rule_on_the_same_imports_is_counted_once():
+    report = TriageReport(file=_file_info(), yara=[_injection_cluster(_TRIO)], capabilities=[
+        Capability("process-injection", "", 3, sorted(_TRIO))])
+    score_report(report)
+    # max(18, 15), not 18 + 15
+    assert report.score == 18
+    assert any("counted once" in e.reason for e in report.score_breakdown)
+
+
+def test_yara_rule_on_other_evidence_counts_in_full():
+    # The injection capability fired on two other imports; the trio is only
+    # present as strings (resolved by name at runtime): a second, hidden path.
+    report = TriageReport(file=_file_info(), yara=[_injection_cluster(_TRIO)], capabilities=[
+        Capability("process-injection", "", 3, ["QueueUserAPC", "VirtualProtectEx"])])
+    score_report(report)
+    assert report.score == 18 + 15
+
+
+def _log_rule(matched):
+    # A rule reading the same command strings as the anti-recovery capability.
+    return YaraHit(rule="Log_Clearing", meta={"weight": 30, "overlaps": "anti-recovery"},
+                   matched=matched)
+
+
+def _anti_recovery(commands):
+    return Capability("anti-recovery", "", 3, [f"string: {c}" for c in commands], source="strings")
+
+
+def test_heavier_yara_rule_is_not_discarded_for_a_lighter_capability():
+    report = TriageReport(file=_file_info(), yara=[_log_rule(["wevtutil cl Security"])],
+                          capabilities=[_anti_recovery(["wevtutil cl Security"])])
+    score_report(report)
+    # one fact at the higher weight: 18 + (30 - 18)
+    assert report.score == 30
+    assert report.verdict == Verdict.SUSPICIOUS
+
+
+def test_cut_short_match_list_is_not_treated_as_same_evidence():
+    from gokdogan.yara_scan import MAX_MATCHED
+    logs = [f"wevtutil cl Log{i}" for i in range(MAX_MATCHED)]
+    report = TriageReport(file=_file_info(), yara=[_log_rule(logs)],
+                          capabilities=[_anti_recovery(logs)])
+    score_report(report)
+    assert report.score == 18 + 30
+
+
+def test_every_capability_string_is_compared_not_only_the_first_few():
+    # Reports show the first few evidence strings; the comparison uses all.
+    logs = [f"wevtutil cl Log{i}" for i in range(8)]
+    report = TriageReport(file=_file_info(), yara=[_log_rule(["wevtutil cl Log7"])],
+                          capabilities=[_anti_recovery(logs)])
+    score_report(report)
+    assert report.score == 30

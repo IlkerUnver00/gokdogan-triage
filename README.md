@@ -64,19 +64,19 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Clustering** | `--cluster` groups a dropzone by shared hashes / fuzzy similarity; `--baseline` diffs a sample against a known-good reference | work a folder family-by-family, or answer "is this the real X or a trojanized X?" |
 | **Managed (.NET)** | CLR-header detection: runtime version, flags, obfuscator fingerprints | flags that a sample is .NET (import-based capabilities are blind to managed code) and spots ConfuserEx / .NET Reactor / SmartAssembly |
 | **Rich header** | toolchain **rich_hash** + decoded `@comp.id` entries + checksum validation | fingerprints the exact build environment (more specific than imphash); a bad checksum means a forged/copied header — an anti-clustering tell |
-| **Resource walker** | enumerates `.rsrc`, hashes each leaf, flags **embedded PEs** and **high-entropy blobs** | the dropper/packer's favourite hiding spot; compressed image resources are whitelisted so clean binaries stay quiet |
+| **Resource walker** | enumerates `.rsrc`, hashes each leaf, flags **embedded PEs** and **high-entropy blobs** | the dropper/packer's favourite hiding spot; compressed media (PNG, JPEG, GIF, audio, fonts) is recognised by its header and exempt, while archives (ZIP, CAB, 7z, …) stay flagged, since a compressed second stage is what a dropper carries |
 | **Export table** | DLL name, named/ordinal counts, forwarders, launch-mechanism exports (`ReflectiveLoader`, `DllRegisterServer`, `ServiceMain`) | tells you how a DLL expects to be run — reflective beacon, `regsvr32` target, or service host |
 | **Delay-load imports** | lazily-resolved imports, **merged into capability analysis** | APIs hidden in the delay-load table (network, injection) still light up their capability tags |
 | **Entropy** | Shannon entropy per section + overall | executable code sits ~6 bits/byte; ≥7.2 means compressed/encrypted content |
 | **Packer detection** | known section names (UPX, VMProtect, Themida, …) + structural heuristics | packing is the single cheapest evasion; heuristics survive renamed sections |
-| **Anomalies** | W+X sections, TLS callbacks, wiped timestamps, missing imports, oversized overlay, bad checksum | things real compilers rarely produce |
+| **Anomalies** | W+X sections, TLS callbacks, wiped or impossible timestamps, missing imports, oversized overlay, bad checksum | things real compilers rarely produce; a reproducible build (`/Brepro`) stores a hash where the time would be, so its stamp is shown as a hash, not flagged |
 | **Authenticode** | real signature **verification** via Windows `WinVerifyTrust` (offline) + signer/issuer names | distinguishes a *valid* signature from a **tampered** one (digest mismatch = modified after signing), expired, or untrusted-root — a strong trojanized-binary tell |
-| **Strings** | ASCII + UTF-16LE extraction, regex classification (URL, IP, domain, registry, PDB path, shell command, user-agent) | fastest source of IOCs and intent; CA/vendor noise is filtered out |
+| **Strings** | ASCII + UTF-16LE extraction, regex classification (URL, IP, domain, registry, PDB path, user-agent, suspicious command invocation, bare LOLBin name) | fastest source of IOCs and intent; CA/vendor noise is filtered out. A command counts when the invocation is suspicious (`powershell -enc`, `certutil -urlcache`, `vssadmin delete shadows`, …); a tool merely named (`rundll32.exe`) is shown but not scored |
 | **Encoded strings (FLOSS-lite)** | brute-force **single-byte XOR/ADD/ROL** + **Base64/hex** recovery of hidden IOCs and embedded PEs | surfaces the C2/commands malware encodes to dodge a plain `strings` pass — via a fast key-invariant adjacency search, not code emulation |
 | **Config blobs** | **entropy islands** — localized high-entropy regions inside calm writable sections | spots an encrypted config/staged payload hiding in `.data` without decrypting it; read-only `.rdata` cert data is excluded so clean binaries stay quiet |
-| **Capabilities** | import table → behavior tags (`process-injection`, `keylogging`, `anti-recovery`, …), capa-style with per-rule minimum hit counts | tells the analyst *what it could do* without running it |
+| **Capabilities** | import table → behavior tags (`process-injection`, `keylogging`, `anti-recovery`, …), capa-style with per-rule minimum hit counts, and specific APIs required where generic ones are linked by every program | tells the analyst *what it could do* without running it |
 | **ATT&CK mapping** | capabilities + YARA rules → MITRE ATT&CK techniques, grouped by tactic in kill-chain order | speaks the language of detections, reports, and threat intel |
-| **YARA** | bundled + user-supplied rules; `meta.weight` feeds the score directly, `meta.attack` feeds the ATT&CK summary | drop your team's rules in and they participate in the verdict |
+| **YARA** | bundled + user-supplied rules; `meta.weight` feeds the score directly, `meta.attack` feeds the ATT&CK summary, `meta.overlaps` names a capability read from the same evidence so one fact is not counted twice | drop your team's rules in and they participate in the verdict |
 | **Verdict** | transparent weighted score with a printed breakdown | every point has a reason — the analyst can argue with it |
 | **Reporting** | ANSI console, JSON, **self-contained HTML** (verdict rationale embedded), CSV/JSONL batch, ATT&CK Navigator layer, **MISP event** | one engine, many outputs — terminal for triage, HTML for the case file, CSV for the dropzone, JSON for the pipeline, MISP for threat-intel sharing |
 | **Reputation** (opt-in) | VirusTotal + MalwareBazaar **hash-only** lookup, off by default | "is this already known?" without uploading the sample — only the SHA-256 leaves, and only when you pass `--reputation` with a key |
@@ -297,7 +297,10 @@ gokdogan/
 │   ├── cli.py            # argparse CLI, exit codes
 │   ├── web.py            # optional FastAPI upload-and-triage service
 │   └── rules/            # bundled starter YARA rules (packaged with the wheel)
-└── tests/                # pytest: unit per module + e2e on notepad.exe
+├── scripts/
+│   └── benign_sweep.py   # false-positive benchmark over installed PE files
+└── tests/                # pytest: unit per module, e2e on system binaries,
+                          # detection guard (tests/archetypes.py)
 ```
 
 ## Design notes
@@ -305,12 +308,22 @@ gokdogan/
 - **Every stage is a pure function over `bytes`/`pefile.PE` → dataclasses.**
   Analyzers don't know about each other or about the output format, so adding
   a stage (e.g. rich-header hashing) means one module + one line in `engine.py`.
-- **Capability rules require minimum distinct API hits** — `GetTickCount`
-  alone never lights up `anti-debug`; three timing/debug APIs together do.
+- **Capability rules need specific evidence, not just a count.**
+  `IsDebuggerPresent`, `GetTickCount` and `QueryPerformanceCounter` are linked
+  into every MSVC program, so even together they do not light up `anti-debug`;
+  that takes `CheckRemoteDebuggerPresent` or `NtQueryInformationProcess`.
+  `keylogging` needs a capture mechanism (a hook, async polling or raw input)
+  plus a second one, a keyboard-state read or a key-to-character translation.
   This is the difference between a tag an analyst trusts and alert fatigue.
 - **The verdict is auditable by construction.** The score breakdown *is* the
   report; there is no hidden model. YARA rules can inject their own weight via
   `meta.weight`, so a team's high-confidence family rules can outvote heuristics.
+- **One fact counts once.** Packing signals are capped together; a YARA rule
+  that reads the same strings as a capability adds only what exceeds it; in a
+  program importing 200 or more functions, the common behaviour tags (network,
+  crypto, registry, …) are capped together, because a program that large has
+  them all. Each rule was priced on benign software with
+  [`scripts/benign_sweep.py`](scripts/benign_sweep.py) before it went in.
 - **Graceful degradation**: no yara-python, no rules dir, unparseable imports —
   each degrades to a note in the report instead of a crash.
 - **Offline by default.** The `triage()` engine never touches the network;
@@ -356,6 +369,13 @@ gokdogan/
   - [x] pattern-based stack-string recovery (no emulator dependency)
   - [x] pluggable family config extractors (Discord/Telegram/stager URLs)
   - [x] FastAPI upload-and-triage service; wheel-packaged rules + Dockerfile
+- [ ] **v0.6 — measured accuracy**
+  - [x] benign false-positive benchmark (`scripts/benign_sweep.py`) with a held-out check
+  - [x] calibration against it: specific-API rules, one fact counted once,
+        size-aware capability cap, reproducible-build timestamps
+  - [x] detection guard: synthetic malware-shaped reports keep their verdicts
+  - [ ] recall on a labelled malware corpus (isolated lab)
+  - [ ] a second machine and software mix for the false-positive rate
 
 ## What gokdogan does not do
 
@@ -380,11 +400,32 @@ analysts already rely on, and its edges are worth stating plainly:
 - **.NET is a blind spot.** Managed assemblies and common obfuscators are
   detected, but import-based capability analysis sees nothing inside managed
   code.
-- **Accuracy is not measured yet.** Weights and thresholds are hand-set and
-  checked against clean system binaries; recall and precision on real malware
-  have not been measured. Two known false positives are kept visible in the
-  test suite: a stock `mmc.exe` and a validly signed `chrome.exe` both score
-  `HIGH_RISK`. Treat the verdict as a prioritisation signal.
+- **False positives are measured on one machine; recall is not measured.**
+  [`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
+  files and counts every verdict above `LIKELY_CLEAN` as a false positive
+  (installed software is assumed benign; nothing was checked against a
+  reputation service). On one Windows 11 workstation it drew a random sample
+  of files up to 12 MB under `System32`, `Program Files` and
+  `Program Files (x86)`, and the rules in this release were tuned on those
+  files: on the 2,887 still on disk, v0.5.2 flagged 11.8% `SUSPICIOUS` or
+  worse and 1.9% `HIGH_RISK`, this release 2.0% and 0.1%. Those numbers
+  flatter the engine, because the rules were fitted to the same files. The estimate to
+  quote comes from a second sample of 2,694 other files from the same
+  machine that played no part in tuning: v0.5.2 12.7% / 2.2%, this release
+  2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%). On
+  native PE files, which the import-based rules actually analyse, it is
+  3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
+  The machine is not a typical workload: most third-party files come from
+  two forensic suites, installers are almost absent, and files over 12 MB
+  were not scanned. Recall on real malware has not been measured: the test
+  suite only checks that synthetic malware-shaped reports keep their
+  verdicts through tuning. Treat the verdict as a prioritisation signal.
+- **Padding the import table buys the size cap.** Common capability tags
+  are capped in programs that import 200 or more distinct functions, because
+  that is where benign software stacks them. A sample that links 200 real
+  functions gets the cap too; duplicate and delay-load entries do not count,
+  and severity-3 tags (injection, keylogging, download-and-execute, dropper)
+  always count in full.
 - **Signature verification is Windows-only.** Elsewhere the Authenticode
   status is `unavailable`, so the same file can score differently.
 - **Certificate-table checks are deliberately strict.** Anything in the
@@ -402,15 +443,26 @@ analysts already rely on, and its edges are worth stating plainly:
 pytest -v
 ```
 
-207 tests: unit tests cover each analyzer in isolation with synthetic
-inputs. The integration suite runs the full pipeline against real system binaries
-(`notepad.exe`, `kernel32.dll`) and asserts they never score `HIGH_RISK`
-and never trip the dropper / embedded-config / phantom-string false
-positives. Two known false positives are kept visible as `xfail`
-tests: a stock `mmc.exe` and a validly signed `chrome.exe` both score
-`HIGH_RISK`, because large legitimate programs import enough APIs for
-several capability rules to stack. That is a calibration problem for a
-measured benchmark, not something to hand-tune against two files.
+256 tests: unit tests cover each analyzer in isolation with synthetic
+inputs. The integration suite runs the full pipeline against real system
+binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and, where installed, a
+signed `chrome.exe`) and asserts none scores `HIGH_RISK` or trips the
+dropper / embedded-config / phantom-string false positives; at v0.5.2
+`mmc.exe` and `chrome.exe` did score `HIGH_RISK` (83 and 79). The detection
+guard ([`tests/archetypes.py`](tests/archetypes.py)) scores twelve
+synthetic malware-shaped reports and fails if calibration lowers any of them
+below the verdict v0.5.2 gave it (one documented exception).
+
+The false-positive benchmark is a script, not part of `pytest`:
+
+```bash
+python scripts/benign_sweep.py --limit 3000 --out sweep_results/sample
+```
+
+It writes per-file results, the signals behind the flagged files and the
+worst offenders to `sweep_results/` (git-ignored: the paths describe your
+machine). `--paths-from` re-scores the same files with another engine
+(`--engine`), and `--exclude-results` draws a held-out sample.
 
 ## License
 

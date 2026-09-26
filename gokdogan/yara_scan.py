@@ -54,6 +54,27 @@ def scan(data: bytes, rules_dir: str | Path | None = None) -> tuple[list[YaraHit
                 tags=list(match.tags),
                 meta=dict(match.meta),
                 strings=identifiers,
+                matched=_matched_text(match),
             )
         )
     return hits, None
+
+
+# A rule has a handful of strings, so distinct matches (ignoring case) stay
+# few; a list that reaches this length was cut short.
+MAX_MATCHED = 32
+
+
+def _matched_text(match) -> list[str]:
+    """Distinct matched strings as text, so the verdict can tell whether a
+    rule saw the same evidence as a capability (see ``meta.overlaps``)."""
+    out: dict[str, str] = {}
+    for s in match.strings:
+        for instance in s.instances:
+            raw = instance.matched_data
+            wide = len(raw) >= 2 and len(raw) % 2 == 0 and not any(raw[1::2])
+            text = raw.decode("utf-16le" if wide else "latin-1", errors="replace")[:200]
+            out.setdefault(text.lower(), text)
+            if len(out) >= MAX_MATCHED:
+                return list(out.values())
+    return list(out.values())

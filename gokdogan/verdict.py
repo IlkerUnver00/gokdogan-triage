@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from .entropy import HIGH_ENTROPY_FILE
 from .loader import is_packing_anomaly
-from .models import ScoreEntry, TriageReport, Verdict
+from .models import Capability, ScoreEntry, TriageReport, Verdict, YaraHit
 from .overlay import MIN_HIDDEN_BYTES
+from .yara_scan import MAX_MATCHED
 
 SUSPICIOUS_THRESHOLD = 30
 HIGH_RISK_THRESHOLD = 60
@@ -21,6 +22,31 @@ HIGH_RISK_THRESHOLD = 60
 # evidence at all, so the group is capped: packing alone routes a sample to
 # SUSPICIOUS (look closer or detonate it), never to HIGH_RISK.
 _PACKING_CAP = SUSPICIOUS_THRESHOLD
+
+# Network, crypto, registry, screen, clipboard, privileges, services: a large
+# program imports enough APIs to have all of them, which says how big it is,
+# not what it intends. On 2,888 benign binaries these tags stacking additively
+# were the main source of false positives, and 139 of the 168 such files still
+# on disk import 200 functions or more. So in a program that large, severity
+# 1-2 tags read from imports and exports are capped together. In a smaller one
+# the same tags are not explained by size and count in full (on that sample,
+# lifting the cap below 200 imports flagged no further file; the closest, with
+# 186 imports, reached 29). Severity 3 tags and tags read from content always
+# count in full. Known limit: a sample that links 200 real functions gets the
+# cap too; only duplicate and delay-load entries, which cost nothing, are
+# kept out of the count (loader.distinct_import_count).
+_COMMON_CAP = 16
+_LARGE_IMPORT_TABLE = 200
+_STRUCTURAL_SOURCES = {"imports", "exports"}
+
+# Signals too common in benign software to carry full weight. TLS callbacks
+# were present in 25% of the benign sweep (C++ thread_local, runtime init) and
+# plaintext network IOC strings (URLs, IPs, domains) in 52% (certificate,
+# vendor and documentation links). Both are real techniques, so they still
+# count, just not as much.
+_WEAK_ANOMALIES = ("TLS callbacks present",)
+_WEAK_ANOMALY_POINTS = 2
+_IOC_CAP = 5
 
 # Capability severity -> points per capability.
 _CAP_POINTS = {1: 2, 2: 8, 3: 18}
@@ -47,27 +73,43 @@ def score_report(report: TriageReport) -> None:
         add(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}"), is_packing=True)
 
     for anomaly in report.anomalies:
-        add(ScoreEntry(6, f"anomaly: {anomaly}"), is_packing=is_packing_anomaly(anomaly))
+        points = _WEAK_ANOMALY_POINTS if anomaly.startswith(_WEAK_ANOMALIES) else 6
+        add(ScoreEntry(points, f"anomaly: {anomaly}"), is_packing=is_packing_anomaly(anomaly))
 
     if report.file.compile_timestamp_anomaly:
         entries.append(ScoreEntry(5, report.file.compile_timestamp_anomaly))
 
+    common_points = 0
     for cap in report.capabilities:
-        entries.append(
-            ScoreEntry(_CAP_POINTS.get(cap.severity, 2), f"capability: {cap.name}")
-        )
+        entry = ScoreEntry(_CAP_POINTS.get(cap.severity, 2), f"capability: {cap.name}")
+        entries.append(entry)
+        if cap.severity <= 2 and cap.source in _STRUCTURAL_SOURCES:
+            common_points += entry.points
+    if report.import_count >= _LARGE_IMPORT_TABLE and common_points > _COMMON_CAP:
+        entries.append(ScoreEntry(_COMMON_CAP - common_points,
+                                  f"cap: common capabilities of a large program "
+                                  f"({report.import_count} imports) capped at {_COMMON_CAP}"))
 
+    capabilities = {c.name: c for c in report.capabilities}
     for hit in report.yara:
         points = hit.meta.get("weight", _YARA_DEFAULT_POINTS)
         if not isinstance(points, int):
             points = _YARA_DEFAULT_POINTS
+        cap = capabilities.get(hit.meta.get("overlaps"))
+        if cap is not None and _same_evidence(hit, cap):
+            # One fact seen twice (an imported API name is also a string in the
+            # file): count it once, at the higher of the two weights.
+            entries.append(ScoreEntry(max(0, points - _CAP_POINTS.get(cap.severity, 2)),
+                                      f"YARA match: {hit.rule} (same evidence as capability "
+                                      f"{cap.name}, counted once)"))
+            continue
         add(ScoreEntry(points, f"YARA match: {hit.rule}"), is_packing="packer" in hit.tags)
 
     ioc_count = sum(
         report.string_stats.get(k, 0) for k in ("url", "ipv4", "domain")
     )
     if ioc_count:
-        entries.append(ScoreEntry(min(ioc_count, 10), f"{ioc_count} network IOC string(s)"))
+        entries.append(ScoreEntry(min(ioc_count, _IOC_CAP), f"{ioc_count} network IOC string(s)"))
 
     cmd_count = report.string_stats.get("command", 0)
     if cmd_count:
@@ -77,7 +119,7 @@ def score_report(report: TriageReport) -> None:
     # reason to XOR-hide a URL or an embedded PE.
     hidden = [
         d for d in report.decoded_strings
-        if d.category in ("url", "ipv4", "domain", "command", "embedded-pe")
+        if d.category in ("url", "ipv4", "domain", "command", "lolbin", "embedded-pe")
     ]
     if hidden:
         entries.append(ScoreEntry(min(8 * len(hidden), 24),
@@ -164,3 +206,16 @@ def score_report(report: TriageReport) -> None:
         report.verdict = Verdict.SUSPICIOUS
     else:
         report.verdict = Verdict.LIKELY_CLEAN
+
+
+def _same_evidence(hit: YaraHit, cap: Capability) -> bool:
+    """True when everything the rule matched is already the capability's evidence.
+
+    A rule naming the injection APIs also matches the import table of a file
+    that imports them; the same names kept as GetProcAddress strings, or a
+    backup-deletion command the capability never saw, are separate evidence.
+    """
+    if not hit.matched or len(hit.matched) >= MAX_MATCHED:  # nothing to compare, or cut short
+        return False
+    evidence = "\n".join(cap.evidence).lower()
+    return all(m.lower() in evidence for m in hit.matched)

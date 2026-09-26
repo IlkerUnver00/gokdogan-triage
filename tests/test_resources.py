@@ -94,3 +94,41 @@ def test_walk_notepad_has_resources_and_no_false_embedded_pe():
         assert not any("embedded PE" in f for f in r.flags)
     # entropy and hashes are populated
     assert all(len(r.sha256) == 64 for r in resources)
+
+
+def _high_entropy(type_name, data):
+    return any("high entropy" in f for f in _classify_resource(type_name, data, entropy=7.95))
+
+
+def test_compressed_media_is_recognised_by_content_not_type():
+    # MFC/Office file PNGs under a custom "PNG" type rather than RT_ICON.
+    png = bytes.fromhex("89504e470d0a1a0a 0000000d49484452") + bytes(64)
+    assert not _high_entropy("PNG", png)
+    riff = b"RIFF" + (4 + 64).to_bytes(4, "little") + b"WAVE" + bytes(64)
+    assert not _high_entropy("WAVE", riff)
+    # an encrypted blob with no known header is still flagged
+    assert _high_entropy("PNG", bytes(64))
+
+
+def test_pasted_media_magic_does_not_hide_an_encrypted_blob():
+    blob = bytes(range(256)) * 4
+    assert _high_entropy("RT_RCDATA", bytes.fromhex("89504e470d0a1a0a") + blob)  # no IHDR chunk
+    assert _high_entropy("RT_RCDATA", b"RIFF" + bytes(4) + b"WAVE" + blob)       # size field wrong
+    assert _high_entropy("RT_RCDATA", bytes.fromhex("ffd8ff") + blob)             # no JPEG end marker
+    assert _high_entropy("RT_RCDATA", b"ID3" + blob)                              # no ID3 version
+
+
+def test_compressed_archives_in_resources_stay_flagged():
+    # A zipped or gzipped second stage is the dropper shape, not an image.
+    for magic in (b"PK\x03\x04", bytes.fromhex("1f8b08"), b"MSCF", bytes.fromhex("377abcaf271c"),
+                  b"BZh9", bytes.fromhex("fd377a585a00")):
+        assert _high_entropy("RT_RCDATA", magic + bytes(64)), magic
+
+
+def test_many_high_entropy_resources_are_one_anomaly():
+    res = [ResourceInfo("RT_RCDATA", str(i), "9/1", 4096, 7.95, "a" * 64,
+                        flags=["high entropy 7.95 (packed/encrypted)"]) for i in range(40)]
+    anomalies = resource_anomalies(res)
+    assert len(anomalies) == 1
+    assert anomalies[0].startswith("40 resources are high-entropy")
+    assert "+37 more" in anomalies[0]

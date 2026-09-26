@@ -25,7 +25,12 @@ _TELEGRAM = re.compile(r"\bbot(\d{6,12}:[A-Za-z0-9_-]{30,45})\b")
 _REMOTE_HOSTS = re.compile(
     r"https?://(?:pastebin\.com/raw/|raw\.githubusercontent\.com/|"
     r"gist\.githubusercontent\.com/|transfer\.sh/|paste\.ee/r/|"
-    r"cdn\.discordapp\.com/attachments/)[^\s\"'<>]+", re.I)
+    # The image is scanned as latin-1 text, so NULs and other binary bytes
+    # are not whitespace: the URL must stop at the first non-URL byte. A bare
+    # prefix ending the string counts too: loaders append the paste id at
+    # runtime.
+    r"cdn\.discordapp\.com/attachments/)(?:[^\s\"'<>\x00-\x1f\x7f-\xff]+|"
+    r"(?=[\s\"'<>\x00-\x1f\x7f-\xff]|$))", re.I)
 
 
 def _discord(texts: Iterable[str]) -> list[ConfigField]:

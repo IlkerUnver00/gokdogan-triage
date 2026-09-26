@@ -7,8 +7,9 @@ sky. The package and command are the ASCII `gokdogan`.
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-- **~4,900 lines** of Python across 31 focused modules
-- **~2,400 lines** of tests · **207 tests** · real-binary integration suite
+- **~5,200 lines** of Python across 31 focused modules
+- **~2,950 lines** of tests · **256 tests** · real-binary integration suite
+- False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 2.2% of held-out benign files flagged, down from 12.7% at v0.5.2
 - Hard deps: `pefile`, `ppdeep` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
@@ -25,7 +26,7 @@ fast, and trustworthy for an analyst.
 | **Pure functions → dataclasses** | Every analyzer is a pure function over `bytes`/`pefile.PE` returning dataclasses ([`models.py`](gokdogan/models.py)). Analyzers never know about each other or the output format. Adding a stage = one module + one line in [`engine.py`](gokdogan/engine.py). |
 | **Offline by default** | The `triage()` core never touches the network and never runs the sample. The single online feature (reputation) is opt-in, hash-only, and lives in the CLI layer — so the analysis core is safe on an air-gapped malware workstation. |
 | **Auditable verdict** | The score *is* the report: every point carries a human-readable reason ([`verdict.py`](gokdogan/verdict.py)). There is no hidden model an analyst can't argue with. |
-| **Calibrated against false positives** | Thresholds were tuned empirically against stock signed Windows binaries, not guessed. Capability rules require a minimum number of distinct API hits; entropy islands only fire in writable sections; compressed icon resources are whitelisted. |
+| **Calibrated against false positives, on one machine** | Weights were set by triaging a random sample of 2,888 installed PE files on one workstation and removing the causes of the verdicts benign software got ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)), then checked on a second, held-out sample from the same machine. Capability rules need specific APIs, not just a count of generic ones; entropy islands only fire in writable sections; compressed media resources are recognised by their headers. |
 | **Graceful degradation** | Missing YARA, missing rules, a corrupt resource tree, an unparseable import table — each becomes a note in the report, never a crash. |
 
 ---
@@ -151,9 +152,23 @@ led to a 512-byte window (random ≈ 7.5+) and a 7.4 cut. ([`blobs.py`](gokdogan
 **False positives eliminated by calibration, not hand-waving.** Config-blob
 detection was swept across 150 stock signed system binaries; read-only
 `.rdata` legitimately carries high-entropy certificate data, so scanning was
-restricted to writable sections → **0 false positives**. The same discipline
-whitelists compressed PNG icons in the resource walker and requires minimum
-distinct API hits before a capability fires.
+restricted to writable sections → **0 false positives on those 150 files**
+(the wider benign sweep below still finds entropy islands in 1% of files).
+The same discipline recognises compressed media in the resource walker by
+its header and requires specific APIs before a capability fires.
+
+**False positives measured, then removed at the cause.** v0.5.2 rated 11.8%
+of 2,888 installed PE files on one workstation `SUSPICIOUS` or worse.
+[`scripts/benign_sweep.py`](scripts/benign_sweep.py) tallies which score
+reasons fire on benign files and how many points they carry in the flagged
+ones, and each fix went after one cause: reproducible-build timestamps read
+as forged dates (58% of files), debugger checks every MSVC runtime links,
+GUI keyboard calls read as keylogging, the same evidence scored twice by a
+capability and a YARA rule, and common behaviour tags adding up in large
+programs. Every candidate rule was priced on those files before it went in,
+and synthetic malware-shaped reports guard against losing detection. On a
+held-out sample of 2,694 other files the rate fell from 12.7% to 2.2%.
+([`verdict.py`](gokdogan/verdict.py), [`capabilities.py`](gokdogan/capabilities.py))
 
 **Security of the tool itself.** Malware strings can contain markup; the HTML
 report passes every sample-derived value through `html.escape`, so opening a
@@ -175,20 +190,23 @@ the CLI layer so the `triage()` engine stays provably offline.
        alt="gokdogan verdict model: the LIKELY_CLEAN / SUSPICIOUS / HIGH_RISK spectrum with thresholds and representative additive weights">
 </p>
 
-Scoring is deliberately transparent and additive, with two guard rails in the
+Scoring is deliberately transparent and additive, with guard rails in the
 last rows below. Representative weights:
 
 | Signal | Points |
 |---|---|
 | Packer detected | +15 |
 | High overall entropy (≥ 7.0) | +10 |
-| Each structural anomaly | +6 |
+| Each structural anomaly | +6 (TLS callbacks +2) |
 | Capability (severity 1 / 2 / 3) | +2 / +8 / +18 |
 | YARA match | rule `meta.weight`, default +15 |
+| Network IOC strings | +1 each, at most +5 |
 | Encoded IOC/payload recovered | up to +24 |
 | Valid Authenticode signature | −15, or 0 if the certificate table carries unauthenticated data |
 | Signature present but not valid (self-signed, expired, unverified) | 0 |
 | Packing signals together (packer, entropy, packer YARA, stub anomalies) | capped at 30 |
+| Severity 1–2 capabilities from imports/exports, in a file importing ≥ 200 functions | capped at 16 together |
+| YARA rule on the same matched text as the capability its `meta.overlaps` names | only the weight above that capability's points |
 
 Thresholds: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. The full breakdown is
 printed in every report — the analyst can see exactly why a sample scored the
@@ -200,17 +218,24 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**207 tests / ~2,400 lines.** Unit tests cover each analyzer in isolation with
+**256 tests / ~2,950 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
-entropy islands, synthetic certificate tables). The integration suite runs the full pipeline against real system binaries
-(`notepad.exe`, `kernel32.dll`) and asserts they never score `HIGH_RISK`
-and never trip the dropper / embedded-config / phantom-string false
-positives. Two known false positives are kept visible as `xfail`
-tests: a stock `mmc.exe` and a validly signed `chrome.exe` both score
-`HIGH_RISK`, because large legitimate programs import enough APIs for
-several capability rules to stack. That is a calibration problem for a
-measured benchmark, not something to hand-tune against two files. Network
-code is tested with injected HTTP mocks — no real external calls.
+entropy islands, synthetic certificate tables, hostile strings that once made
+classification quadratic). The integration suite runs the full pipeline
+against real system binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and,
+where installed, a signed `chrome.exe`) and asserts none scores `HIGH_RISK`;
+at v0.5.2 `mmc.exe` and `chrome.exe` did (83 and 79). The detection guard
+([`tests/archetypes.py`](tests/archetypes.py)) scores twelve synthetic
+malware-shaped reports and fails if calibration lowers any below the verdict
+v0.5.2 gave it (one documented exception). Network code is tested with
+injected HTTP mocks — no real external calls.
+
+The false-positive benchmark is a script, not part of `pytest`:
+[`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
+files, treats each as benign, and reports the flag rate, the reasons behind
+it, and the worst files. It measures only the benign half of a benchmark;
+recall on real malware needs a labelled corpus in an isolated lab and has
+not been measured.
 
 ---
 

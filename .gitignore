@@ -10,3 +10,4 @@ reports/
 samples/
 .coverage
 .coverage.*
+sweep_results/

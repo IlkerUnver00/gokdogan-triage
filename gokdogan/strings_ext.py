@@ -15,6 +15,50 @@ from .models import StringHit
 ASCII_PATTERN = rb"[\x20-\x7e]{%d,}"
 WIDE_PATTERN = rb"(?:[\x20-\x7e]\x00){%d,}"
 
+# Building blocks for the command patterns. A tool name may carry ".exe" and a
+# closing quote; the flag that makes an invocation suspicious must sit near
+# the name. Every gap is bounded: extracted strings can be megabytes long, and
+# an unbounded ".*" after a name that repeats thousands of times turns
+# classification quadratic.
+_EXE = r"(?:\.exe)?\"?"
+_GAP = r"[^\r\n]{0,160}?"
+_USER_DIR = (r"(?:\\(?:appdata|temp|programdata|users\\public)\\|"
+             r"%(?:temp|tmp|appdata|localappdata|programdata|public)%)")
+_PS = r"\b(?:powershell|pwsh)" + _EXE + r"\s" + _GAP
+
+# Each alternative was priced against 2,888 benign binaries before it went in
+# (scripts/benign_sweep.py): "cmd /c|/k" matches 11 of them (Git's launchers,
+# forfiles), every other alternative at most 1.
+_COMMAND_PATTERNS = (
+    r"\bcmd" + _EXE + r"\s*/[ck]\s",
+    # PowerShell accepts any unambiguous prefix of a parameter name.
+    _PS + r"-e(?:c|nc?\w*)?\s+(?:[A-Za-z0-9+/]{4,}|%l?s|\{\d\})",
+    _PS + r"-w(?:in\w*)?\s+(?:hidden|1)\b",
+    _PS + r"-(?:ep|ex\w*)\s+(?:bypass|unrestricted)\b",
+    _PS + r"-nop(?:rofile)?\b",
+    r"\biex\s*[(\$]|invoke-expression\s*[(\$]|\.download(?:string|file|data)\s*\(|"
+    r"new-object\s+(?:system\.)?net\.webclient|start-bitstransfer\s",
+    r"(?:^|\s)-e(?:c|nc\w*)\s+[A-Za-z0-9+/]{16,}|^-e(?:c|nc|ncodedcommand)$",
+    r"\b(?:add|set)-mppreference\s" + _GAP + r"-(?:exclusion\w*|disable\w*)",
+    r"\bmshta" + _EXE + r"\s+[^\r\n]{0,16}(?:https?:|javascript:|vbscript:|about:)",
+    r"\brundll32" + _EXE + r"\s" + _GAP + r"(?:javascript:|" + _USER_DIR + ")",
+    r"\bregsvr32" + _EXE + r"\s" + _GAP + r"(?:[/-]i:|" + _USER_DIR + ")",
+    r"\b[wc]script" + _EXE + r"\s" + _GAP + r"(?://e:(?:jscript|vbscript)|//b\b|" + _USER_DIR + ")",
+    r"\bcertutil" + _EXE + r"\s" + _GAP + r"[-/](?:decode(?:hex)?|urlcache)\b",
+    r"\bbitsadmin" + _EXE + r"\s" + _GAP + r"/(?:transfer|addfile|setnotifycmdline)\b",
+    r"\bschtasks" + _EXE + r"\s" + _GAP + r"/create\b",
+    r"\bsc" + _EXE + r"\s+(?:\\\\\S+\s+)?(?:create|config)\s",
+    r"\bnet1?" + _EXE + r"\s+user\s" + _GAP + r"/add\b",
+    r"\bnet1?" + _EXE + r"\s+localgroup\s+administrators\s" + _GAP + r"/add\b",
+    r"\bwhoami" + _EXE + r"\s+/(?:all|priv|groups)\b",
+    # Destroying backups and logs (also read by the anti-recovery capability).
+    r"\bvssadmin" + _EXE + r"\s+(?:delete\s+shadows|resize\s+shadowstorage)",
+    r"\bwmic" + _EXE + r"\s" + _GAP + r"shadowcopy\s[^\r\n]{0,40}?delete|win32_shadowcopy" + _GAP + r"delete",
+    r"\bbcdedit" + _EXE + r"\s" + _GAP + r"/(?:set|delete)\b",
+    r"\bwbadmin" + _EXE + r"\s+delete\s+(?:catalog|systemstatebackup|backup)",
+    r"\bwevtutil" + _EXE + r"\s+(?:cl|clear-log)\b",
+)
+
 # Order matters: first match wins.
 CLASSIFIERS: list[tuple[str, re.Pattern[str]]] = [
     ("url", re.compile(r"^(?:https?|ftp)://[^\s\"']{4,}", re.I)),
@@ -30,12 +74,18 @@ CLASSIFIERS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"^Mozilla/\d|^User-Agent", re.I),
     ),
     (
+        # Suspicious *invocations*: how a living-off-the-land binary is called,
+        # not the fact that its name appears (see "lolbin" below).
         "command",
+        re.compile("|".join(f"(?:{p})" for p in _COMMAND_PATTERNS), re.I),
+    ),
+    (
+        # A LOLBin merely named: Windows components mention rundll32 and
+        # regsvr32 all the time. Shown to the analyst, not scored.
+        "lolbin",
         re.compile(
-            r"(?:cmd(?:\.exe)?\s*/c|powershell|"
-            r"-enc(?:odedcommand)?\b|rundll32|regsvr32|mshta|wscript|cscript|"
-            r"schtasks|sc\s+(?:create|config)|net\s+user|whoami|"
-            r"vssadmin\s+delete|bcdedit|wevtutil\s+cl|certutil.*-decode|bitsadmin)",
+            r"\b(?:rundll32|regsvr32|mshta|wscript|cscript|powershell|pwsh|schtasks|whoami|"
+            r"bitsadmin|certutil|bcdedit|wmic|vssadmin|wbadmin|wevtutil)(?:\.exe)?\b",
             re.I,
         ),
     ),
