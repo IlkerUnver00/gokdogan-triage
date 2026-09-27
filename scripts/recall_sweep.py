@@ -196,24 +196,33 @@ def read_sample(item: str, password: bytes, max_bytes: int) -> bytes:
             data = fh.read(max_bytes + 1)
     else:
         archive, index, name = member
-        try:
-            import pyzipper  # AES archives (MalwareBazaar); also reads ZipCrypto
-
-            opener, kwargs = pyzipper.AESZipFile, {}
-        except ImportError:
-            opener, kwargs = zipfile.ZipFile, {"pwd": password}
-        with opener(archive) as z:
-            if opener is not zipfile.ZipFile:
-                z.setpassword(password)
+        # The standard library decrypts ZipCrypto (MalwareBazaar's daily
+        # batches) faster than pyzipper; WinZip AES (a single sample
+        # downloaded from its API) needs pyzipper.
+        with zipfile.ZipFile(archive) as z:
             info = z.infolist()[index]
             if info.filename != name:
                 raise ValueError("archive changed since it was listed")
-            if info.compress_type == _AES_METHOD:
-                raise RuntimeError("AES-encrypted ZIP: pip install pyzipper")
-            if info.compress_type not in _ZIP_METHODS:
-                raise ValueError("unsupported ZIP compression (bzip2/LZMA)")
-            with z.open(info, **kwargs) as fh:
-                data = fh.read(max_bytes + 1)
+            aes = info.compress_type == _AES_METHOD
+            if not aes:
+                if info.compress_type not in _ZIP_METHODS:
+                    raise ValueError("unsupported ZIP compression (bzip2/LZMA)")
+                with z.open(info, pwd=password) as fh:
+                    data = fh.read(max_bytes + 1)
+        if aes:
+            try:
+                import pyzipper
+            except ImportError:
+                raise RuntimeError("AES-encrypted ZIP: pip install pyzipper") from None
+            with pyzipper.AESZipFile(archive) as z:
+                z.setpassword(password)
+                info = z.infolist()[index]
+                if info.filename != name:
+                    raise ValueError("archive changed since it was listed")
+                if info.compress_type not in _ZIP_METHODS:
+                    raise ValueError("unsupported ZIP compression (bzip2/LZMA)")
+                with z.open(info) as fh:
+                    data = fh.read(max_bytes + 1)
     if len(data) > max_bytes:
         raise ValueError("larger than --max-mb")
     return data

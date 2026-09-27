@@ -4,12 +4,14 @@ import hashlib
 import json
 import os
 import signal
+import struct
 import subprocess
 import sys
 import threading
 import time
 import warnings
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -67,6 +69,59 @@ def test_samples_are_read_from_files_and_zip_members(tmp_path):
     items, skipped, unreadable = rs.collect(tmp_path, max_bytes=1024)
     assert not skipped and not unreadable
     assert [rs.read_sample(i, b"infected", 1024) for i in items] == [b"raw bytes", b"zipped bytes"]
+
+
+def _zipcrypto(path, name, data, password=b"infected"):
+    """A ZIP whose one member is encrypted the traditional (ZipCrypto) way, as
+    MalwareBazaar's daily batches are; zipfile can read these, not write them."""
+    keys = [0x12345678, 0x23456789, 0x34567890]
+
+    def crc(value, byte):
+        return zlib.crc32(bytes([byte]), value ^ 0xFFFFFFFF) ^ 0xFFFFFFFF
+
+    def update(byte):
+        keys[0] = crc(keys[0], byte)
+        keys[1] = ((keys[1] + (keys[0] & 0xFF)) * 134775813 + 1) & 0xFFFFFFFF
+        keys[2] = crc(keys[2], keys[1] >> 24)
+
+    for byte in password:
+        update(byte)
+    checksum = zlib.crc32(data)
+    blob = bytearray()
+    for byte in bytes(11) + bytes([checksum >> 24]) + data:   # the header's last byte checks the password
+        t = (keys[2] | 2) & 0xFFFF
+        blob.append(byte ^ (((t * (t ^ 1)) >> 8) & 0xFF))
+        update(byte)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(name, bytes(blob))
+    raw = bytearray(path.read_bytes())
+    for header, flag, fields in ((b"PK\x03\x04", 6, 14), (b"PK\x01\x02", 8, 16)):
+        at = raw.index(header)
+        raw[at + flag] |= 1                                               # encrypted
+        struct.pack_into("<III", raw, at + fields, checksum, len(blob), len(data))
+    path.write_bytes(bytes(raw))
+
+
+def test_zipcrypto_members_are_read_with_the_password(tmp_path):
+    sample = b"MZ" + bytes(range(256)) * 4
+    _zipcrypto(tmp_path / "2026-09-25.zip", "0" * 64 + ".exe", sample)
+    items, skipped, _ = rs.collect(tmp_path, max_bytes=1 << 20)
+    assert not skipped and rs.read_sample(items[0], b"infected", 1 << 20) == sample
+    with pytest.raises(RuntimeError, match="password"):
+        rs.read_sample(items[0], b"wrong", 1 << 20)
+
+
+def test_aes_members_are_read_with_pyzipper(tmp_path):
+    # a single sample downloaded from MalwareBazaar's API comes AES-encrypted
+    pyzipper = pytest.importorskip("pyzipper")
+    sample = b"MZ" + bytes(range(256)) * 4
+    with pyzipper.AESZipFile(tmp_path / "one.zip", "w", compression=pyzipper.ZIP_DEFLATED,
+                             encryption=pyzipper.WZ_AES) as z:
+        z.setpassword(b"infected")
+        z.writestr("sample.exe", sample)
+    items, skipped, _ = rs.collect(tmp_path, max_bytes=1 << 20)
+    assert not skipped and rs.aes_members(items) == 1
+    assert rs.read_sample(items[0], b"infected", 1 << 20) == sample
 
 
 def test_repeated_member_names_are_each_read(tmp_path):
