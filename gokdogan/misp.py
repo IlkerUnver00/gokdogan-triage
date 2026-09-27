@@ -11,7 +11,7 @@ into a MISP instance to share what gokdogan found.
 from __future__ import annotations
 
 import json
-import os
+import ntpath
 from typing import Any
 
 from .models import TriageReport, Verdict
@@ -41,11 +41,14 @@ def _attr(atype: str, value: str, category: str, to_ids: bool | None = None) -> 
 
 def to_misp_event(report: TriageReport) -> dict[str, Any]:
     f = report.file
+    # ntpath splits on "\" and "/", so a report written on Windows names the
+    # same file when it is exported on Linux.
+    filename = ntpath.basename(f.path)
     attrs: list[dict[str, Any]] = [
         _attr("sha256", f.sha256, "Payload delivery"),
         _attr("sha1", f.sha1, "Payload delivery"),
         _attr("md5", f.md5, "Payload delivery"),
-        _attr("filename", os.path.basename(f.path), "Payload delivery"),
+        _attr("filename", filename, "Payload delivery"),
     ]
     for atype, value in (("imphash", f.imphash), ("ssdeep", f.ssdeep),
                          ("authentihash", f.authentihash), ("impfuzzy", f.impfuzzy)):
@@ -83,7 +86,7 @@ def to_misp_event(report: TriageReport) -> dict[str, Any]:
 
     return {
         "Event": {
-            "info": f"gokdogan triage: {os.path.basename(f.path)} ({report.verdict.value})",
+            "info": f"gokdogan triage: {filename} ({report.verdict.value})",
             "analysis": "2",              # completed
             "threat_level_id": _THREAT_LEVEL[report.verdict],
             "distribution": "0",          # your organisation only

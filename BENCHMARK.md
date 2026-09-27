@@ -32,10 +32,15 @@ different sample as soon as one file on disk changes.
 
 - **Isolated VM only.** No shared folders, no clipboard sharing, no network
   while samples are inside, and a snapshot to revert to. Never the analyst's
-  everyday machine. As a safety net the script refuses a corpus on a network
-  share or mapped remote drive, or under a OneDrive (including synced
-  SharePoint libraries), Dropbox, Google Drive or iCloud folder; it cannot
-  check the rest of these rules for you.
+  everyday machine. A Linux VM is the safer choice: a Windows sample cannot
+  run there. A Hyper-V enhanced session (and any RDP client) shares the
+  clipboard and can share drives: turn both off under Show Options → Local
+  Resources before connecting. As a safety net the script refuses a corpus
+  on a network share or mapped remote drive, on a host folder mounted into
+  a Linux VM (SMB or NFS, Hyper-V and WSL 9p, virtiofs, VirtualBox or VMware
+  shared folders, xrdp drive redirection), or under a OneDrive (including
+  synced SharePoint libraries), Dropbox, Google Drive or iCloud folder; it
+  cannot check the rest of these rules for you.
 - **Samples stay zipped.** Keep them in password-protected ZIPs (password
   `infected`). `recall_sweep.py` reads each member into memory, never more
   than `--max-mb` of it whatever the archive claims, and triages it there
@@ -77,20 +82,39 @@ different sample as soon as one file on disk changes.
 
 The scripts live in the repository, not in the PyPI package.
 
-1. With the VM still online and holding no samples, copy in a checkout and
-   install: `pip install -e .[yara] pyzipper` from the repository root.
-   Take a snapshot.
-2. Cut the network. Attach the corpus (for example as a read-only disk)
-   and run the sweep:
+1. With the VM still online and holding no samples, copy in a checkout,
+   install it with `pip install -e ".[dev]" pyzipper` from the repository
+   root (the `dev` extra brings YARA and pytest) and check the install with
+   `python -m pytest -q`: tests that need Windows system files skip, none
+   should fail, and one runs a real PE (pip's launcher stub) through the
+   recall script, with YARA when yara-python is installed. On Ubuntu (the
+   build tools matter only where yara-python has no ready-made wheel, such
+   as Python 3.14):
 
    ```bash
-   python scripts/recall_sweep.py --corpus D:/corpus --manifest D:/corpus/manifest.csv \
-       --out recall_results
+   sudo apt update && sudo apt install -y python3-venv python3-dev build-essential git
+   git clone https://github.com/IlkerUnver00/gokdogan-triage.git ~/gokdogan
+   python3 -m venv ~/gkd-venv && source ~/gkd-venv/bin/activate
+   cd ~/gokdogan && pip install -e ".[dev]" pyzipper && python -m pytest -q
+   python -c "import yara, pyzipper; print('YARA', yara.__version__)"
    ```
 
-   It stops before triaging anything if the manifest has no `sha256`
-   column, the engine is older than 0.6.0, or AES archives are present
-   without `pyzipper`; it warns if YARA did not run.
+   Take a snapshot.
+2. Cut the network. Put the corpus on the VM's own disk (a folder, or a
+   disk attached read-only for it) and run the sweep from the checkout,
+   with the virtual environment active (a new terminal needs
+   `source ~/gkd-venv/bin/activate && cd ~/gokdogan` again):
+
+   ```bash
+   python scripts/recall_sweep.py --corpus ~/corpus --manifest ~/corpus/manifest.csv \
+       --jobs 2 --out recall_results
+   ```
+
+   A large sample can take a few hundred MB in its worker: on a VM with
+   8 GB of memory, keep `--jobs` at 2 or 3. It stops before triaging
+   anything if the manifest has no `sha256` column, the engine is older
+   than 0.6.0, or AES archives are present without `pyzipper`; it warns if
+   YARA did not run.
 3. Copy `recall_results/` out, then revert the VM to the snapshot.
 4. Outside, add a benign sweep of the same engine code for the threshold
    table. The run's split and its copy of the manifest are reused:
@@ -126,6 +150,8 @@ The scripts live in the repository, not in the PyPI package.
 - **Threshold table.** With `--benign`, the summary shows detection against
   the benign flag rate at each score threshold. It warns when the two runs
   used different engine code or when YARA ran on one side and not the other.
+  The code hash ignores line endings, so a Linux lab checkout and a Windows
+  checkout of the same commit match.
 - **What the rate means.** It is the share of malware PE files a triage
   pre-filter would send for a closer look (`SUSPICIOUS` or worse). Packed
   samples top out at `SUSPICIOUS` by design, and .NET samples are read from

@@ -23,17 +23,18 @@ git-ignored; only the summary numbers belong in docs.
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import hashlib
 import json
 import multiprocessing
+import multiprocessing.connection
 import os
-import queue
 import random
 import re
-import signal
 import sys
+import threading
 import time
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 DEFAULT_ROOTS = [
@@ -90,12 +91,16 @@ def normalize(reason: str) -> str:
 
 
 def _code_hash(package_dir: Path) -> str:
-    """SHA-256 over the engine's source and rule files, in a stable order."""
+    """SHA-256 over the engine's source and rule files, in a stable order.
+
+    Line endings are folded to LF: git checks a commit out with CRLF on
+    Windows and LF on Linux, and a recall run in a Linux lab must match a
+    benign sweep of the same commit on Windows."""
     digest = hashlib.sha256()
     for f in sorted(package_dir.rglob("*")):
         if f.suffix in (".py", ".yar", ".yara"):
             digest.update(f.relative_to(package_dir).as_posix().encode())
-            digest.update(f.read_bytes())
+            digest.update(f.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 
@@ -125,24 +130,177 @@ def collect(roots: list[str], max_bytes: int) -> tuple[list[str], dict[str, int]
     return found, dict(skipped)
 
 
-_started_queue = None
-_worker_token = None
-# How long a finished worker's last row may take to arrive before the item it
-# held counts as lost (a worker also exits normally after maxtasksperchild).
-_GRACE_SECONDS = 10.0
+# Each worker process talks to the parent over a pipe of its own. Nothing is
+# shared between workers, so killing one that runs past the timeout cannot
+# leave a lock held that the others need (a multiprocessing.Pool's shared
+# queues can), and the parent always knows which item each worker holds.
+_conn = None       # this worker's end of its pipe; None in the parent
+_TASKS_PER_WORKER = 40  # then a fresh process, so a leak in one file cannot grow
+# The parent's ends of the live workers' pipes. A forked worker inherits them
+# and closes them first, so that it sees EOF if the parent dies.
+_parent_ends: set = set()
+_MAX_JOBS_WINDOWS = 60  # Windows waits on at most 63 handles; one pipe per busy worker
 
 
-def _init_worker(started_queue) -> None:
-    global _started_queue, _worker_token
-    _started_queue = started_queue
-    # Windows reuses PIDs; this token names one worker process for its life.
-    _worker_token = f"{os.getpid()}-{time.time_ns()}"
+def worker_count(jobs: int, items: int) -> int:
+    """How many workers run() starts for `jobs` requested and `items` to do."""
+    if sys.platform == "win32":
+        jobs = min(jobs, _MAX_JOBS_WINDOWS)
+    return max(0, min(jobs, items))
 
 
 def report_start(item: str) -> None:
-    """Called by a worker as it starts an item, so the parent can time it out."""
-    if _started_queue is not None:
-        _started_queue.put((_worker_token, os.getpid(), item, time.time()))
+    """Called by a worker as it starts an item. The timeout counts from when
+    the parent hands the item over; this restarts it (a fresh process's
+    start-up does not count) and marks the item begun: a worker lost before
+    this call says nothing about the file, which is then tried once more."""
+    if _conn is not None:
+        _conn.send(("start", None))
+
+
+def report_progress(**fields) -> None:
+    """Called by a worker mid-item with what it has learnt so far (such as the
+    sample's sha256): the parent puts it on the row if the item then times
+    out or kills its worker."""
+    if _conn is not None:
+        _conn.send(("progress", fields))
+
+
+def _exit_with_parent() -> None:
+    """The per-file timeout lives in the parent: if the parent dies, a worker
+    stuck in a file must not run on for ever."""
+    parent = multiprocessing.parent_process()
+    if parent is not None and parent.sentinel is not None:
+        multiprocessing.connection.wait([parent.sentinel])
+        os._exit(1)
+
+
+def _hard_limit(timeout: float) -> float:
+    """When a worker ends itself on one file: well after the parent would have
+    killed it, so this only matters once the parent is gone."""
+    return timeout * 1.5 + 30
+
+
+def _worker_main(conn, worker, use_yara: bool, extra: tuple, timeout: float) -> None:
+    global _conn
+    for inherited in list(_parent_ends):  # fork copies them; spawn and forkserver do not
+        inherited.close()
+    _parent_ends.clear()
+    threading.Thread(target=_exit_with_parent, daemon=True).start()
+    # The thread above needs the GIL, which a runaway regex can hold for good;
+    # faulthandler's watchdog is C and ends the process without it.
+    backstop = open(os.devnull, "w")  # noqa: SIM115 - for the life of the process
+    _conn = conn
+    for _ in range(_TASKS_PER_WORKER):
+        try:
+            item = conn.recv()
+        except (EOFError, OSError):
+            return
+        if item is None:
+            return
+        faulthandler.dump_traceback_later(_hard_limit(timeout), exit=True, file=backstop)
+        try:
+            row = worker((item, use_yara, *extra))
+        except Exception as exc:
+            row = {"path": item, "error": f"{type(exc).__name__}: {exc}"}
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+        conn.send(("row", row))
+
+
+_stuck: list[int] = []  # workers that outlived a kill (stuck in the kernel): their pids
+
+
+def exit_past_stuck_workers() -> None:
+    """Called once the results are written. A worker that could not be killed
+    would hold multiprocessing's exit handlers (and a forkserver or resource
+    tracker) until the kernel lets it go, so the sweep leaves without them."""
+    if _stuck:
+        print(f"warning: {len(_stuck)} worker(s) could not be killed "
+              f"(pid {', '.join(map(str, _stuck))}); exiting without waiting for them",
+              file=sys.stderr)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+
+
+class _Worker:
+    """One worker process, its pipe, and the item it holds."""
+
+    def __init__(self, ctx, worker, use_yara: bool, extra: tuple, timeout: float, live: set):
+        self.conn, child = ctx.Pipe()
+        _parent_ends.add(self.conn)
+        self.proc = ctx.Process(target=_worker_main,
+                                args=(child, worker, use_yara, extra, timeout), daemon=True)
+        try:
+            self.proc.start()
+        except BaseException:
+            _parent_ends.discard(self.conn)
+            self.conn.close()
+            raise
+        finally:
+            child.close()
+        self.live = live
+        live.add(self)  # run() stops everything in here, however it ends
+        self.item: str | None = None
+        self.given = 0          # items handed to this process
+        self.began = False      # the worker reported starting its current item
+        self.since = 0.0        # when the current item was handed over or began
+        self.progress: dict = {}
+        self.killed = False     # killed on a timeout: never reused, even if slow to die
+
+    def give(self, item: str) -> bool:
+        try:
+            self.conn.send(item)
+        except (OSError, ValueError):
+            return False
+        self.item, self.began, self.since, self.progress = item, False, time.monotonic(), {}
+        self.given += 1
+        return True
+
+    def drain(self) -> list[dict]:
+        """Rows already sent; start and progress notes are applied as read.
+        Stops at a closed or garbled pipe (the process is gone)."""
+        rows = []
+        while True:
+            try:
+                if not self.conn.poll():
+                    break
+                kind, payload = self.conn.recv()
+            except Exception:  # EOF, or a message cut short by a kill
+                break
+            if kind == "start":
+                self.began, self.since = True, time.monotonic()
+            elif kind == "progress" and isinstance(payload, dict):
+                self.progress.update(payload)
+            elif kind == "row" and self.item is not None:
+                if not isinstance(payload, dict):
+                    payload = {"error": f"the worker returned {type(payload).__name__}, not a row"}
+                rows.append(dict(payload, path=self.item))
+                self.item = None
+        return rows
+
+    def kill(self) -> None:
+        if self.killed:
+            return
+        self.killed = True
+        if self.proc.is_alive():
+            self.proc.kill()
+            self.proc.join(1)
+        if self.proc.is_alive():
+            # Stuck in the kernel (a hung disk, say): leave it behind.
+            getattr(multiprocessing.process, "_children", set()).discard(self.proc)
+            _stuck.append(self.proc.pid)
+
+    def stop(self) -> None:
+        if self not in self.live:
+            return  # stopped already
+        self.kill()
+        self.conn.close()
+        _parent_ends.discard(self.conn)
+        self.live.discard(self)
+        if not self.proc.is_alive():
+            self.proc.close()  # its sentinel and, under fork, the pipes a later worker would inherit
 
 
 def report_fields(report, use_yara: bool) -> dict:
@@ -182,89 +340,98 @@ def _triage_one(args: tuple[str, bool]) -> dict:
 def run(paths: list[str], jobs: int, use_yara: bool, out_jsonl: Path,
         timeout: float = 120.0, exclude_hashes: frozenset[str] = frozenset(),
         worker=_triage_one, extra: tuple = ()) -> list[dict]:
-    """Triage paths in a worker pool; a file that runs past `timeout` seconds
+    """Triage paths in worker processes; a file that runs past `timeout` seconds
     (or kills its worker) becomes an error row instead of stalling the sweep.
     Rows whose hash is in `exclude_hashes` are kept but marked excluded.
 
-    `worker` receives ``(path, use_yara, *extra)``, must call report_start(path)
-    first and return a row whose "path" is that same string (other sweeps,
-    such as recall_sweep.py, plug their own reader in here)."""
+    `worker` receives ``(path, use_yara, *extra)``, calls report_start(path)
+    first, and returns the item's row (other sweeps, such as recall_sweep.py,
+    plug their own reader in here). An item is always either waiting or held
+    by exactly one worker, so none can be lost or counted twice."""
+    if jobs < 1:
+        raise ValueError("jobs must be at least 1")
     rows: list[dict] = []
-    finished: set[str] = set()
-    paths = list(dict.fromkeys(paths))  # a repeated path could never finish twice
-    results: queue.Queue = queue.Queue()
-    started_q = multiprocessing.Queue()
-    running: dict[str, tuple[int, str, float]] = {}  # worker token -> (pid, path, start)
-    gone: dict[str, float] = {}  # worker token -> when its process was first missed
+    pending = deque(dict.fromkeys(paths))  # a repeated path is triaged once
+    total = len(pending)
+    jobs = worker_count(jobs, total)
+    attempts: Counter = Counter()
+    ctx = multiprocessing.get_context()
     started = time.perf_counter()
-    pool = multiprocessing.Pool(jobs, initializer=_init_worker, initargs=(started_q,),
-                                maxtasksperchild=40)
+    workers: list[_Worker] = []
+    live: set[_Worker] = set()  # every worker started and not yet stopped
 
-    def fail(path: str, reason: str) -> None:
-        results.put({"path": path, "error": reason, "failure": reason.split()[0]})
+    with out_jsonl.open("w", encoding="utf-8") as sink:
+        def record(row: dict) -> None:
+            if row.get("sha256") in exclude_hashes:
+                row["excluded"] = "same bytes as a file of an excluded run"
+            rows.append(row)
+            sink.write(json.dumps(row) + "\n")
+            if len(rows) % 50 == 0:
+                sink.flush()  # a killed run keeps what it measured
+            if len(rows) % 250 == 0 or len(rows) == total:
+                rate = len(rows) / (time.perf_counter() - started)
+                print(f"  {len(rows)}/{total} files, {rate:.1f}/s", file=sys.stderr)
 
-    try:
-        for p in paths:
-            pool.apply_async(worker, ((p, use_yara, *extra),), callback=results.put,
-                             error_callback=lambda exc, p=p: results.put(
-                                 {"path": p, "error": f"{type(exc).__name__}: {exc}"}))
-        with out_jsonl.open("w", encoding="utf-8") as sink:
-            while len(finished) < len(paths):
-                live = {w.pid for w in pool._pool if w.is_alive()}
-                while True:
-                    try:
-                        token, pid, path, t0 = started_q.get_nowait()
-                    except queue.Empty:
-                        break
-                    # Another token on this PID: that worker died and Windows
-                    # gave its PID to a new one. The same token starting a new
-                    # item only means its last row is still on the way.
-                    for other, (other_pid, other_path, _) in list(running.items()):
-                        if other != token and other_pid == pid:
-                            del running[other]
-                            gone.pop(other, None)
-                            if other_path not in finished:
-                                fail(other_path, "worker died on this file")
-                    if path not in finished:
-                        running[token] = (pid, path, t0)
-                now = time.time()
-                for token, (pid, path, t0) in list(running.items()):
-                    if path in finished:
-                        del running[token]
-                        gone.pop(token, None)
-                    elif pid not in live:
-                        # Exited (a crash, or maxtasksperchild after its last item):
-                        # give a row already sent time to arrive before failing it.
-                        if now - gone.setdefault(token, now) > _GRACE_SECONDS:
-                            del running[token]
-                            gone.pop(token, None)
-                            fail(path, "worker died on this file")
-                    elif now - t0 > timeout:
-                        del running[token]
-                        fail(path, f"timeout after {timeout:.0f}s")
-                        try:
-                            os.kill(pid, signal.SIGTERM)  # the pool starts a replacement
-                        except OSError:
-                            pass
-                try:
-                    row = results.get(timeout=0.2)
-                except queue.Empty:
-                    continue
-                if row["path"] in finished:
-                    continue  # finished just as it was timed out
-                finished.add(row["path"])
-                if row.get("sha256") in exclude_hashes:
-                    row["excluded"] = "same bytes as a file of an excluded run"
-                rows.append(row)
-                sink.write(json.dumps(row) + "\n")
-                if len(rows) % 50 == 0:
-                    sink.flush()  # a killed run keeps what it measured
-                if len(rows) % 250 == 0 or len(rows) == len(paths):
-                    rate = len(rows) / (time.perf_counter() - started)
-                    print(f"  {len(rows)}/{len(paths)} files, {rate:.1f}/s", file=sys.stderr)
-    finally:
-        pool.terminate()
-        pool.join()
+        def fail(w: _Worker, reason: str, died: bool) -> None:
+            item = w.item
+            w.item = None
+            if died and not w.began:
+                # Lost before it started the item (it died idle, or while
+                # starting up): that says nothing about the file.
+                if attempts[item] < 2:
+                    pending.appendleft(item)
+                    return
+                reason = "worker died before starting this file"
+            # what the worker reported before it failed (e.g. the sample's hash)
+            record(dict(w.progress, path=item, error=reason, failure=reason.split()[0]))
+
+        def feed(w: _Worker) -> _Worker:
+            """Give w the next item, replacing it first if it is gone, was
+            killed, or has done its share (the parent counts, so no item goes
+            to a worker that is about to exit)."""
+            while pending and w.item is None:
+                if w.killed or w.given >= _TASKS_PER_WORKER or not w.proc.is_alive():
+                    w.stop()
+                    w = _Worker(ctx, worker, use_yara, extra, timeout, live)
+                item = pending.popleft()
+                attempts[item] += 1
+                if not w.give(item):
+                    pending.appendleft(item)
+                    attempts[item] -= 1
+                    w.stop()
+                    w = _Worker(ctx, worker, use_yara, extra, timeout, live)
+            return w
+
+        try:
+            for _ in range(jobs):  # one at a time, so an interrupt stops those started
+                workers.append(_Worker(ctx, worker, use_yara, extra, timeout, live))
+                workers[-1] = feed(workers[-1])
+            while len(rows) < total:
+                busy = [w for w in workers if w.item is not None]
+                if busy:
+                    # A worker that dies closes its end of the pipe, which wakes this too.
+                    multiprocessing.connection.wait([w.conn for w in busy], timeout=0.5)
+                for i, w in enumerate(workers):
+                    if w.item is not None:
+                        for row in w.drain():
+                            record(row)
+                    if w.item is None:
+                        pass
+                    elif not w.proc.is_alive():
+                        for row in w.drain():  # anything sent just before it exited
+                            record(row)
+                        if w.item is not None:
+                            fail(w, "worker died on this file", died=True)
+                    elif time.monotonic() - w.since > timeout:
+                        w.kill()
+                        for row in w.drain():  # finished as it was being killed
+                            record(row)
+                        if w.item is not None:
+                            fail(w, f"timeout after {timeout:g}s", died=False)
+                    workers[i] = feed(w)
+        finally:
+            for w in list(live):
+                w.stop()
     return rows
 
 
@@ -277,7 +444,9 @@ def summarize(rows: list[dict]) -> dict:
     unique: dict[str, dict] = {}
     errors = []
     excluded = 0
-    for row in rows:
+    # Rows arrive in the order workers finish; sorting by path makes the file
+    # kept for a hash, and every tie below, the same on every run.
+    for row in sorted(rows, key=lambda r: r.get("path", "")):
         if row.get("excluded"):
             excluded += 1
         elif "error" in row:
@@ -309,9 +478,9 @@ def summarize(rows: list[dict]) -> dict:
     signals = sorted(
         ({"signal": k, "files": fired[k], "flagged_files": fired_fp[k],
           "points_in_flagged": points_fp[k]} for k in fired),
-        key=lambda s: -s["points_in_flagged"],
+        key=lambda s: (-s["points_in_flagged"], -s["files"], s["signal"]),
     )
-    worst = sorted(files, key=lambda r: -r["score"])[:25]
+    worst = sorted(files, key=lambda r: (-r["score"], r["path"]))[:25]
     # A timeout or a dead worker is not a parse error: those files may be
     # exactly the ones an engine would flag, so they are counted apart.
     failures = sum(1 for r in errors if r.get("failure"))
@@ -386,6 +555,8 @@ def main(argv: list[str] | None = None) -> int:
                          "release) and refuse to run if another copy is picked up")
     ap.add_argument("--report", metavar="JSONL", help="only re-summarise an earlier results.jsonl")
     args = ap.parse_args(argv)
+    if args.jobs < 1 or args.timeout <= 0 or args.max_mb <= 0:
+        ap.error("--jobs, --timeout and --max-mb must be positive")
     if args.engine:
         # Workers are spawned with the parent's sys.path, so this reaches them too.
         sys.path.insert(0, os.path.abspath(args.engine))
@@ -441,7 +612,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.limit and args.limit < len(paths):
             skipped["not in the random sample"] = len(paths) - args.limit
             paths = random.Random(args.seed).sample(paths, args.limit)
-        print(f"sweeping {len(paths)} files with {args.jobs} workers", file=sys.stderr)
+        print(f"sweeping {len(paths)} files with {worker_count(args.jobs, len(paths))} workers",
+              file=sys.stderr)
         rows = run(paths, args.jobs, not args.no_yara, out / "results.jsonl", args.timeout,
                    seen_hashes)
 
@@ -454,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{summary['files']} unique files: {v.get('SUSPICIOUS', 0)} suspicious, "
           f"{v.get('HIGH_RISK', 0)} high-risk -> {summary['suspicious_or_worse_rate']:.1%} "
           f"flagged ({out / 'summary.md'})", file=sys.stderr)
+    exit_past_stuck_workers()
     return 0
 
 

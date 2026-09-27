@@ -58,13 +58,56 @@ All notable changes to **gokdogan** are documented here. The format follows
 - Sweep rows record `signed`, `is_dll` and whether YARA ran.
 
 ### Fixed
-- `benign_sweep.py`: items that finish quickly were often recorded as
-  "worker died" (138 of 180 fast-failing items in a check), because a
-  worker's next start could overtake its last result. Workers are now
-  tracked by a per-process token, with a grace period for rows in flight.
-  The 0.6.0 numbers are unaffected: those runs had no timeouts or crashes.
-  A path listed twice no longer hangs the sweep, and results are flushed as
-  they arrive.
+- **The benchmark scripts on Linux**, where the recall lab runs. CI now
+  also runs the suite on Ubuntu (Python 3.10 and 3.12), including one
+  recall run over a real PE with YARA, and both jobs stop after 20 minutes.
+  - The sweeps' worker pool is rebuilt around one private pipe per worker
+    process. A `multiprocessing.Pool` shares its queues between workers,
+    so a worker killed on a timeout could leave a lock held and stall the
+    rest, and a worker that died just after starting an item could leave
+    that item unaccounted while the sweep waited for it forever. Now every
+    item is either waiting or held by one worker, a timed-out worker is
+    killed on its own and never reused, and a worker that dies before it
+    starts an item has the item tried once more. The timeout counts from
+    when an item is handed over; `report_start()` restarts it, so a fresh
+    process's start-up does not count. A worker whose sweep dies exits too:
+    at once, or, if it is stuck in native code on a file that never ends,
+    once half the timeout again plus 30 s has passed. A worker stuck in the
+    kernel after a kill no longer keeps the sweep from exiting: it warns
+    and leaves once its results are written. On Windows
+    at most 60 workers run (the handle limit of a wait), and the sweeps
+    print the number that runs. Measured on 300 benign files, verdicts and
+    scores are identical to the old pool's.
+  - This replaces the per-process token and grace period added after
+    0.6.0 for items that finish quickly and were often recorded as "worker
+    died" (138 of 180 fast-failing items in a check): the parent now knows
+    which item each worker holds. The 0.6.0 numbers are unaffected: those
+    runs had no timeouts or crashes. A path listed twice is triaged once,
+    and results are flushed every 50 rows.
+  - A timed-out or crashed sample keeps the hash its worker read, so the
+    recall summary splits it into the held-out or tuning part and matches
+    it to the manifest instead of counting it as missing from the corpus.
+  - The recall guard now refuses, on Linux, a corpus on a host folder
+    mounted into the VM (SMB/NFS, Hyper-V and WSL 9p, virtiofs, VirtualBox,
+    VMware or Parallels shared folders, xrdp drive redirection, FUSE clients
+    of remote storage), identified by device number in the mount table. It
+    checks every filesystem mounted inside the corpus where it starts, and
+    every link in it, Windows junctions included.
+  - The engine code hash folds line endings, so a Windows (CRLF) and a
+    Linux (LF) checkout of the same commit match when a recall run is paired
+    with a benign sweep. Hashes recorded from CRLF checkouts change.
+  - What the recall run leaves out while listing the corpus (bzip2/LZMA
+    members, members over `--max-mb`, unreadable archives and folders,
+    linked folders, which are not followed) is recorded in `engine.json`
+    and shown in the summary, including under `--report`. A corpus folder
+    that cannot be listed at all stops the run instead of scoring nothing.
+  - A `::` in a corpus folder or member name no longer breaks reading, a
+    symlink loop in the corpus is an unreadable file rather than a crash,
+    and tied rows in both sweeps' summary tables are ordered the same way
+    on every run.
+  - `benign_sweep.py --jobs 0` is refused instead of spinning.
+  - MISP export takes the file name from a Windows path on Linux too.
+
 
 ## [0.6.0] — 2026-09-26
 
