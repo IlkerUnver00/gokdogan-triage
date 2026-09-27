@@ -77,6 +77,28 @@ different sample as soon as one file on disk changes.
   Family labels come from the source's tags and are noisy; say so when you
   report. The manifest holds hashes only, so it can be committed or shared:
   anyone with access to the same source can rebuild the corpus.
+- **From MalwareBazaar.** It publishes one password-protected ZIP of each
+  day's new samples (a *daily batch*, every sample first seen that day,
+  UTC, of every file type) and a CSV export of every sample's hash,
+  first-seen time, file type and family. Put the batches of a few days,
+  spread over a year or two, in the corpus folder as they are, and build
+  the manifest for those days from an export made after the last of them
+  ended: EXE and DLL only, at most 20 per family and at most 100 without a
+  family. Which samples a cap keeps depends on their hashes (the same
+  export always gives the same manifest) but not in the way the held-out
+  split does, so capped families land in both parts:
+
+  ```bash
+  python scripts/bazaar_manifest.py --csv full.csv.zip \
+      --days 2026-09-25 2026-06-10 2026-01-15 2025-09-20 --out ~/corpus/manifest.csv
+  ```
+
+  The sweep triages every member of the batches but counts only the
+  manifest's samples; the rest show up as "not in manifest". The batches
+  are ZipCrypto archives, decrypted in pure Python at a few MB/s per
+  worker, and a few of their PE files are larger than 64 MB: run the sweep
+  with `--max-mb 128`. Downloads need a free abuse.ch Auth-Key; follow
+  abuse.ch's fair-use terms.
 
 ### Running
 
@@ -107,7 +129,7 @@ The scripts live in the repository, not in the PyPI package.
 
    ```bash
    python scripts/recall_sweep.py --corpus ~/corpus --manifest ~/corpus/manifest.csv \
-       --jobs 2 --out recall_results
+       --jobs 2 --max-mb 128 --out recall_results
    ```
 
    A large sample can take a few hundred MB in its worker: on a VM with

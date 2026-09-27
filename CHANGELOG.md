@@ -7,6 +7,17 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `scripts/bazaar_manifest.py` builds the recall manifest from
+  MalwareBazaar's CSV export for the days whose daily batches make up the
+  corpus: EXE and DLL only, capped per family (spellings of one family
+  merged), with the samples a cap keeps chosen independently of the
+  held-out split. It warns when the export was made before a requested day
+  ended and fails when a day selects nothing. It reads metadata only and
+  downloads nothing. On MalwareBazaar's export for four days it selects
+  440 samples of 75 families; 34% land in the held-out part.
+- The recall sweep reads ZipCrypto members (MalwareBazaar's daily
+  batches) with the standard library, faster than pyzipper, which it keeps
+  for WinZip AES.
 - **.NET analysis stage.** A managed assembly imports almost nothing native,
   so its behaviour is now read from its metadata with `dnfile` (a new hard
   dependency: pure Python, MIT): the framework members it references, the
