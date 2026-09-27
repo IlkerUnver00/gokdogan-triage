@@ -13,6 +13,7 @@ jobs:
     # known-false-positive xfails) the way the tool ships. The matrix covers
     # every Python the package declares support for.
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -34,3 +35,30 @@ jobs:
 
       - name: Run test suite with coverage
         run: pytest -q --cov=gokdogan --cov-report=term-missing
+
+  test-linux:
+    # The recall benchmark runs in a Linux lab VM (BENCHMARK.md), so the
+    # engine and the sweep scripts must also pass where there is no Windows:
+    # tests that need Windows' own binaries skip (a recall test triages pip's
+    # launcher stub, with YARA), the rest must not assume Windows paths, and
+    # the sweep's worker pool runs under fork.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install with dev extras and pyzipper, as the lab does
+        run: pip install -e ".[dev]" pyzipper
+
+      - name: Run test suite
+        run: pytest -q -rs

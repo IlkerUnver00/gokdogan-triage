@@ -100,6 +100,7 @@ def test_padding_is_reported_even_when_overlay_is_the_signature():
     assert len(notes) == 1 and "CVE-2013-3900" in notes[0]
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="the interpreter is a PE file only on Windows")
 def test_real_signed_binary_has_no_cert_padding():
     pe = pefile.PE(sys.executable, fast_load=True)
     try:
