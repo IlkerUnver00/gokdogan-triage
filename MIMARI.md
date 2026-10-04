@@ -8,9 +8,10 @@
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
-- 31 odaklı modülde **~5.200 satır** Python
+- 31 odaklı modülde **~6.100 satır** Python
 - **~4.300 satır** test · **345 test** · gerçek binary entegrasyon paketi
-- Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %2,2'si işaretleniyor (v0.5.2'de %12,7)
+- Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %1,7'si işaretleniyor (0.6.0'da %2,2, v0.5.2'de %12,7)
+- Tespit benchmark'ı ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): izole laboratuvarda ayrılmış 150 malware örneğinin %71,3'ü işaretleniyor (0.7.0 skorlamasından önce %55,3)
 - Zorunlu bağımlılık: `pefile`, `ppdeep`, `dnfile` · opsiyonel: `yara-python`, `py-tlsh`
 
 Bu belge motorun *nasıl ve neden* böyle kurulduğunu anlatır. Kullanım için

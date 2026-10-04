@@ -189,7 +189,7 @@ footer .mono{color:var(--faint)}
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="n">~5.200</div><div class="l">satır Python · 31 modül</div></div>
+      <div class="stat"><div class="n">~6.100</div><div class="l">satır Python · 31 modül</div></div>
       <div class="stat"><div class="n">345</div><div class="l">test · gerçek binary entegrasyonu</div></div>
       <div class="stat"><div class="n">0</div><div class="l">config-blob yanlış-pozitifi · 150 temiz binary</div></div>
       <div class="stat"><div class="n">133<span style="font-size:.6em;color:var(--muted)">ms</span></div><div class="l">kodlu string taraması (800 KB)</div></div>
@@ -343,8 +343,8 @@ footer .mono{color:var(--faint)}
         <p>256 baytlık pencere rastgeleliği ölçmek için çok küçüktür: gerçek rastgele veri orada ortalama yalnızca <code>~7.17</code> bit verir (küçük-örneklem yanlılığı), eşik sessizce ulaşılamaz hale gelir. Dağılımı ölçmek 512 baytlık pencereye (rastgele ≈ 7.5+) ve 7.4 eşiğine götürdü.</p></div>
       <div class="item"><h3>Yanlış-pozitifler kalibrasyonla giderildi</h3>
         <p>Config-blob tespiti 150 stok imzalı sistem binary'sinde tarandı; salt-okunur <code>.rdata</code> meşru olarak yüksek-entropili sertifika verisi taşır, bu yüzden tarama yazılabilir bölümlerle sınırlandı → o 150 dosyada <b>0 yanlış-pozitif</b>. Aynı disiplin kaynaklardaki sıkıştırılmış medyayı başlığından tanır.</p></div>
-      <div class="item"><h3>Yanlış-pozitifler ölçüldü, kaynağında giderildi <span class="perf">%12,7 <span class="arrow">→</span> %2,2</span></h3>
-        <p>v0.5.2, bir iş istasyonundaki yüklü PE dosyalarının %11,8'ini şüpheli veya üstü buluyordu. <code>scripts/benign_sweep.py</code> hangi skor gerekçelerinin zararsız dosyalarda tetiklendiğini çıkardı; her düzeltme tek bir nedene gitti (reproducible-build zaman damgaları, MSVC çalışma zamanının debugger kontrolleri, keylogging sanılan GUI çağrıları, aynı kanıtın iki kez sayılması, büyük programlarda yaygın etiketlerin toplanması). Ayarlamada kullanılmamış 2.694 başka dosyada oran %12,7'den %2,2'ye indi. Tek makine, yalnızca zararsız yarı. Recall izole bir laboratuvarda ölçülür: dört MalwareBazaar günlük arşivi (75 aileden 445 EXE/DLL) üzerindeki ilk koşu, ayrılmış kısmının %55,3'ünü (83/150) işaretledi; ayarlama kısmından yapılan skor değişiklikleri, aynı örnekler üzerindeki ikinci koşuda oranı %71,3'e (107/150) çıkardı.</p></div>
+      <div class="item"><h3>Yanlış-pozitifler ölçüldü, kaynağında giderildi <span class="perf">%12,7 <span class="arrow">→</span> %1,7</span></h3>
+        <p>v0.5.2, bir iş istasyonundaki yüklü PE dosyalarının %11,8'ini şüpheli veya üstü buluyordu. <code>scripts/benign_sweep.py</code> hangi skor gerekçelerinin zararsız dosyalarda tetiklendiğini çıkardı; her düzeltme tek bir nedene gitti (reproducible-build zaman damgaları, MSVC çalışma zamanının debugger kontrolleri, keylogging sanılan GUI çağrıları, aynı kanıtın iki kez sayılması, büyük programlarda yaygın etiketlerin toplanması). Ayarlamada kullanılmamış 2.694 başka dosyada oran %12,7'den %2,2'ye indi; 0.7.0'ın skor değişiklikleri, hâlâ diskte olan 2.674 dosyada %1,7'ye indirdi. Tek makine, yalnızca zararsız yarı. Recall izole bir laboratuvarda ölçülür: dört MalwareBazaar günlük arşivi (75 aileden 445 EXE/DLL) üzerindeki ilk koşu, ayrılmış kısmının %55,3'ünü (83/150) işaretledi; ayarlama kısmından yapılan skor değişiklikleri, aynı örnekler üzerindeki ikinci koşuda oranı %71,3'e (107/150) çıkardı.</p></div>
       <div class="item"><h3>Aracın kendisinin güvenliği</h3>
         <p>Malware string'leri markup içerebilir; HTML raporu her sample-türevli değeri <code>html.escape</code>'ten geçirir, böylece bir rapor açıldığında gömülü bir <code>&lt;script&gt;</code> asla çalışmaz — testle doğrulandı.</p></div>
     </div>

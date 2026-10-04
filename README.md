@@ -369,7 +369,7 @@ gokdogan/
   - [x] pattern-based stack-string recovery (no emulator dependency)
   - [x] pluggable family config extractors (Discord/Telegram/stager URLs)
   - [x] FastAPI upload-and-triage service; wheel-packaged rules + Dockerfile
-- [ ] **v0.6 — measured accuracy**
+- [ ] **v0.6–0.7 — measured accuracy**
   - [x] benign false-positive benchmark (`scripts/benign_sweep.py`) with a held-out check
   - [x] calibration against it: specific-API rules, one fact counted once,
         size-aware capability cap, reproducible-build timestamps
@@ -378,6 +378,8 @@ gokdogan/
   - [x] recall on a labelled malware corpus (isolated lab): 55.3% of the held-out part
   - [x] confirm the scoring changes made from that run's tuning part in a second run:
         71.3% of the same held-out part, nothing the first run flagged lost
+  - [x] .NET behaviour from metadata and IL (`dnfile`)
+  - [x] Windows catalog signatures, checked offline from the analysed bytes
   - [ ] recall on a corpus first seen after the rules were frozen
   - [ ] a second machine and software mix for the false-positive rate
 
@@ -420,15 +422,15 @@ analysts already rely on, and its edges are worth stating plainly:
   (installed software is assumed benign; nothing was checked against a
   reputation service). On one Windows 11 workstation it drew a random sample
   of files up to 12 MB under `System32`, `Program Files` and
-  `Program Files (x86)`, and the rules in this release were tuned on those
+  `Program Files (x86)`, and the rules were tuned on those
   files: on the 2,887 still on disk, v0.5.2 flagged 11.8% `SUSPICIOUS` or
-  worse and 1.9% `HIGH_RISK`, this release 2.0% and 0.1%. Those numbers
+  worse and 1.9% `HIGH_RISK`, 0.6.0 2.0% and 0.1%. Those numbers
   flatter the engine, because the rules were fitted to the same files. The estimate to
   quote comes from a second sample of 2,694 other files from the same
-  machine that played no part in tuning: v0.5.2 12.7% / 2.2%, this release
+  machine that played no part in tuning: v0.5.2 12.7% / 2.2%, 0.6.0
   2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%); with
   the .NET stage added since, 2.2% / 0.22% (60 and 6 files), and with the
-  scoring changes in [Unreleased](CHANGELOG.md) 1.7% / 0.11% (46 and 3 of
+  scoring changes in [0.7.0](CHANGELOG.md) 1.7% / 0.11% (46 and 3 of
   2,674 files still on disk). On
   native PE files, which the import-based rules actually analyse, it is
   3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
@@ -437,7 +439,7 @@ analysts already rely on, and its edges are worth stating plainly:
   were not scanned. Recall was measured in an isolated lab on four
   MalwareBazaar daily batches (445 EXE/DLL samples of 75 families): 55.3% of
   the held-out part (83/150) at `SUSPICIOUS` or worse before the scoring
-  changes in [Unreleased](CHANGELOG.md), made from the tuning part only, and
+  changes in [0.7.0](CHANGELOG.md), made from the tuning part only, and
   71.3% (107/150) after them. Most of the newly flagged samples score
   exactly 30, so the gain sits at the `SUSPICIOUS` line. Family labels are
   noisy, the corpus spans four days and most of its families appear on both

@@ -7,9 +7,10 @@ sky. The package and command are the ASCII `gokdogan`.
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-- **~5,200 lines** of Python across 31 focused modules
+- **~6,100 lines** of Python across 31 focused modules
 - **~4,300 lines** of tests · **345 tests** · real-binary integration suite
-- False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 2.2% of held-out benign files flagged, down from 12.7% at v0.5.2
+- False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 1.7% of held-out benign files flagged at 0.7.0 (2.2% at 0.6.0, 12.7% at v0.5.2)
+- Detection benchmark ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): 71.3% of 150 held-out malware samples flagged in an isolated lab (55.3% before the 0.7.0 scoring)
 - Hard deps: `pefile`, `ppdeep`, `dnfile` · optional: `yara-python`, `py-tlsh`
 
 This document explains *how it is built and why*. For usage, see [README.md](README.md).
