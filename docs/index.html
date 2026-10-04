@@ -190,7 +190,7 @@ footer .mono{color:var(--faint)}
 
     <div class="stats">
       <div class="stat"><div class="n">~5.200</div><div class="l">satır Python · 31 modül</div></div>
-      <div class="stat"><div class="n">256</div><div class="l">test · gerçek binary entegrasyonu</div></div>
+      <div class="stat"><div class="n">345</div><div class="l">test · gerçek binary entegrasyonu</div></div>
       <div class="stat"><div class="n">0</div><div class="l">config-blob yanlış-pozitifi · 150 temiz binary</div></div>
       <div class="stat"><div class="n">133<span style="font-size:.6em;color:var(--muted)">ms</span></div><div class="l">kodlu string taraması (800 KB)</div></div>
     </div>
@@ -344,7 +344,7 @@ footer .mono{color:var(--faint)}
       <div class="item"><h3>Yanlış-pozitifler kalibrasyonla giderildi</h3>
         <p>Config-blob tespiti 150 stok imzalı sistem binary'sinde tarandı; salt-okunur <code>.rdata</code> meşru olarak yüksek-entropili sertifika verisi taşır, bu yüzden tarama yazılabilir bölümlerle sınırlandı → o 150 dosyada <b>0 yanlış-pozitif</b>. Aynı disiplin kaynaklardaki sıkıştırılmış medyayı başlığından tanır.</p></div>
       <div class="item"><h3>Yanlış-pozitifler ölçüldü, kaynağında giderildi <span class="perf">%12,7 <span class="arrow">→</span> %2,2</span></h3>
-        <p>v0.5.2, bir iş istasyonundaki yüklü PE dosyalarının %11,8'ini şüpheli veya üstü buluyordu. <code>scripts/benign_sweep.py</code> hangi skor gerekçelerinin zararsız dosyalarda tetiklendiğini çıkardı; her düzeltme tek bir nedene gitti (reproducible-build zaman damgaları, MSVC çalışma zamanının debugger kontrolleri, keylogging sanılan GUI çağrıları, aynı kanıtın iki kez sayılması, büyük programlarda yaygın etiketlerin toplanması). Ayarlamada kullanılmamış 2.694 başka dosyada oran %12,7'den %2,2'ye indi. Tek makine, yalnızca zararsız yarı: gerçek malware üzerinde recall henüz ölçülmedi.</p></div>
+        <p>v0.5.2, bir iş istasyonundaki yüklü PE dosyalarının %11,8'ini şüpheli veya üstü buluyordu. <code>scripts/benign_sweep.py</code> hangi skor gerekçelerinin zararsız dosyalarda tetiklendiğini çıkardı; her düzeltme tek bir nedene gitti (reproducible-build zaman damgaları, MSVC çalışma zamanının debugger kontrolleri, keylogging sanılan GUI çağrıları, aynı kanıtın iki kez sayılması, büyük programlarda yaygın etiketlerin toplanması). Ayarlamada kullanılmamış 2.694 başka dosyada oran %12,7'den %2,2'ye indi. Tek makine, yalnızca zararsız yarı. Recall izole bir laboratuvarda ölçülür: dört MalwareBazaar günlük arşivi (75 aileden 445 EXE/DLL) üzerindeki ilk koşu, ayrılmış kısmının %55,3'ünü (83/150) işaretledi; ondan yapılan skor değişiklikleri ikinci bir koşuyla doğrulanıyor.</p></div>
       <div class="item"><h3>Aracın kendisinin güvenliği</h3>
         <p>Malware string'leri markup içerebilir; HTML raporu her sample-türevli değeri <code>html.escape</code>'ten geçirir, böylece bir rapor açıldığında gömülü bir <code>&lt;script&gt;</code> asla çalışmaz — testle doğrulandı.</p></div>
     </div>
@@ -363,12 +363,15 @@ footer .mono{color:var(--faint)}
         <tr><td>Packer tespit edildi</td><td class="num pos">+15</td></tr>
         <tr><td>Yüksek genel entropi (≥ 7.0)</td><td class="num pos">+10</td></tr>
         <tr><td>Her yapısal anomali (TLS callback +2)</td><td class="num pos">+6</td></tr>
-        <tr><td>Capability (şiddet 1 / 2 / 3)</td><td class="num pos">+2 / +8 / +18</td></tr>
+        <tr><td>Bayat PE sağlama toplamı / yüksek entropili overlay, imza kredisi olmayan herhangi bir dosyada</td><td class="num pos">+12 / +10</td></tr>
+        <tr><td>Capability (şiddet 1 / 2 / 3; keylogging +8)</td><td class="num pos">+2 / +8 / +18</td></tr>
         <tr><td>YARA eşleşmesi (kural meta.weight)</td><td class="num pos">+15</td></tr>
         <tr><td>Kurtarılmış kodlu IOC / payload</td><td class="num pos">+24'e kadar</td></tr>
-        <tr><td>Geçerli Authenticode imzası (sertifika tablosunda doğrulanmamış veri varsa 0)</td><td class="num neg">−15</td></tr>
+        <tr><td>Geçerli Authenticode imzası, gömülü ya da Windows kataloğu üzerinden (sertifika tablosunda doğrulanmamış veri varsa 0)</td><td class="num neg">−15</td></tr>
         <tr><td>İmza var ama geçerli değil (self-signed, süresi dolmuş)</td><td class="num">0</td></tr>
         <tr><td>Paketleme sinyalleri birlikte (packer, entropi, packer YARA, stub)</td><td class="num">en fazla 30</td></tr>
+        <tr><td>Kimsenin kefil olmadığı, beş ya da daha az import'lu GUI/konsol programı</td><td class="num">paketleme grubu 30</td></tr>
+        <tr><td>Kimsenin kefil olmadığı, imaj entropisi ≥ 7.0 olan GUI/konsol programı</td><td class="num">30'a yükseltilir</td></tr>
         <tr><td>Import/export'tan şiddet 1–2 capability'ler, ≥ 200 fonksiyon import eden dosyada</td><td class="num">birlikte en fazla 16</td></tr>
         <tr><td>Aynı eşleşen metni bir capability ile paylaşan YARA kuralı (meta.overlaps)</td><td class="num">yalnızca aşan kısım</td></tr>
       </table>
@@ -384,7 +387,7 @@ footer .mono{color:var(--faint)}
     <span class="eyebrow">Test &amp; teknoloji</span>
     <h2>Doğrulama ve yığın</h2>
     <div class="grid2">
-      <div class="card"><span class="k">256 test · ~2.950 satır</span><h3>Gerçek binary'lere karşı</h3>
+      <div class="card"><span class="k">345 test · ~4.300 satır</span><h3>Gerçek binary'lere karşı</h3>
         <p>Birim testleri her analizciyi sentetik girdilerle izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları, ekilmiş entropi adaları). Entegrasyon paketi tüm boru hattını <span class="mono">notepad.exe</span>, <span class="mono">kernel32.dll</span>, <span class="mono">mmc.exe</span> ve imzalı <span class="mono">chrome.exe</span>'ye karşı çalıştırır ve HIGH_RISK almadıklarını doğrular (v0.5.2'de son ikisi alıyordu). Tespit koruması on iki sentetik, malware biçimli raporun verdiktinin kalibrasyonla düşmediğini denetler. Ağ kodu enjekte HTTP mock'larıyla test edilir — gerçek dış çağrı yok.</p></div>
       <div class="card"><span class="k">Yığın</span><h3>Ağır bağımlılık yok</h3>
         <p class="stack"><b>Python 3.10+</b> · <b>pefile</b> — PE parse<br>

@@ -15,6 +15,7 @@ import json
 from typing import Any
 
 from .models import TriageReport
+from .overlay import MIN_PAYLOAD
 
 # Stable column order for CSV; also the key order for JSONL objects.
 FIELDS = [
@@ -48,7 +49,10 @@ def _overlay(report: TriageReport) -> str:
     ov = report.overlay
     if ov is None or ov.is_signature:
         return ""
-    return "embedded-pe" if ov.contains_pe else ov.type_guess
+    if ov.contains_pe:
+        return "embedded-pe"
+    payload = ov.size if ov.payload_size is None else ov.payload_size
+    return ov.type_guess if payload >= MIN_PAYLOAD else ""   # a few bytes beside the signature
 
 
 def summary_row(report: TriageReport) -> dict[str, Any]:

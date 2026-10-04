@@ -8,7 +8,7 @@ extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
 - **~5,200 lines** of Python across 31 focused modules
-- **~2,950 lines** of tests · **256 tests** · real-binary integration suite
+- **~4,300 lines** of tests · **345 tests** · real-binary integration suite
 - False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 2.2% of held-out benign files flagged, down from 12.7% at v0.5.2
 - Hard deps: `pefile`, `ppdeep`, `dnfile` · optional: `yara-python`, `py-tlsh`
 
@@ -198,15 +198,24 @@ last rows below. Representative weights:
 | Packer detected | +15 |
 | High overall entropy (≥ 7.0) | +10 |
 | Each structural anomaly | +6 (TLS callbacks +2) |
-| Capability (severity 1 / 2 / 3) | +2 / +8 / +18 |
+| Stale PE checksum / high-entropy overlay, in a file without the signature credit | +12 / +10 (else +6) |
+| Capability (severity 1 / 2 / 3) | +2 / +8 / +18 (keylogging +8) |
 | YARA match | rule `meta.weight`, default +15 |
 | Network IOC strings | +1 each, at most +5 |
 | Encoded IOC/payload recovered | up to +24 |
-| Valid Authenticode signature | −15, or 0 if the certificate table carries unauthenticated data |
+| Valid Authenticode signature, embedded or through a Windows catalog | −15, or 0 if the certificate table carries unauthenticated data |
 | Signature present but not valid (self-signed, expired, unverified) | 0 |
 | Packing signals together (packer, entropy, packer YARA, stub anomalies) | capped at 30 |
+| A program nobody vouches for with five imports or fewer | joins the packing group at its cap of 30 |
+| A program nobody vouches for whose image (file without overlay) has entropy ≥ 7.0 | raised to 30 |
 | Severity 1–2 capabilities from imports/exports/.NET references, in a file importing ≥ 200 native functions | capped at 16 together |
 | YARA rule on the same matched text as the capability its `meta.overlaps` names | only the weight above that capability's points |
+
+"Nobody vouches for" means a GUI or console program (not a DLL, driver or
+boot image) without a valid signature. The two program rules come from the
+first recall run: an unknown crypter or a stager that resolves its API at run
+time is as opaque as a named packer, and the engine's rule for those (packing
+alone routes a file to `SUSPICIOUS`) now covers them.
 
 Thresholds: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. The full breakdown is
 printed in every report — the analyst can see exactly why a sample scored the
@@ -218,7 +227,7 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**256 tests / ~2,950 lines.** Unit tests cover each analyzer in isolation with
+**345 tests / ~4,300 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
 entropy islands, synthetic certificate tables, hostile strings that once made
 classification quadratic). The integration suite runs the full pipeline
@@ -233,9 +242,12 @@ injected HTTP mocks — no real external calls.
 The false-positive benchmark is a script, not part of `pytest`:
 [`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
 files, treats each as benign, and reports the flag rate, the reasons behind
-it, and the worst files. It measures only the benign half of a benchmark;
-recall on real malware needs a labelled corpus in an isolated lab and has
-not been measured.
+it, and the worst files. It measures only the benign half of a benchmark.
+Recall is measured by [`scripts/recall_sweep.py`](scripts/recall_sweep.py) in
+an isolated lab ([BENCHMARK.md](BENCHMARK.md)): the first run, over four
+MalwareBazaar daily batches (445 EXE/DLL samples of 75 families), flagged
+55.3% of its held-out part (83/150). The scoring changes made from its
+tuning part are being confirmed in a second run.
 
 ---
 

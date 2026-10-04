@@ -6,8 +6,8 @@ recall). gokdogan ships a script for each half. Neither runs a sample.
 
 | Half | Script | Where it runs | Measured so far |
 |---|---|---|---|
-| False positives | [`scripts/benign_sweep.py`](scripts/benign_sweep.py) | any machine, over installed software | 2.2% of 2,694 held-out benign files flagged (0.6.0, one Windows 11 machine) |
-| Detection | [`scripts/recall_sweep.py`](scripts/recall_sweep.py) | an isolated analysis VM only | not yet measured |
+| False positives | [`scripts/benign_sweep.py`](scripts/benign_sweep.py) | any machine, over installed software | 2.2% of 2,694 held-out benign files flagged (0.6.0, one Windows 11 machine); 1.7% of the 2,674 still on disk with the [Unreleased](CHANGELOG.md) scoring |
+| Detection | [`scripts/recall_sweep.py`](scripts/recall_sweep.py) | an isolated analysis VM only | 55.3% of 150 held-out malware samples flagged (first run: four MalwareBazaar daily batches, 445 EXE/DLL samples of 75 families, engine before the [Unreleased](CHANGELOG.md) scoring changes) |
 
 ## False positives
 
@@ -166,9 +166,13 @@ The scripts live in the repository, not in the PyPI package.
   are counted apart.
 - **Signatures.** `triage_bytes()` cannot verify Authenticode (that needs a
   file on disk), so every signature scores as "unverified", which is 0
-  points. Real verification could move a sample either way: −15 for a valid
-  signature, +30 or more for a tampered or revoked one. The summary reports
-  the rate had every signature been valid.
+  points, and the file counts as one nobody vouches for. Real verification
+  could move a sample either way: a valid signature takes 15 points off and
+  lifts the rules for unvouched programs (the import-less packing entry, the
+  unreadable-image floor, the 12/10 weights); a revoked one adds 15 and a
+  tampered one 30 (less the 12/10 extras it no longer gets). The lab worker scores every signed sample a second time as if
+  its signature were valid (`score_if_valid` in `results.jsonl`), and the
+  summary reports the rate had every signature been valid from that.
 - **Threshold table.** With `--benign`, the summary shows detection against
   the benign flag rate at each score threshold. It warns when the two runs
   used different engine code or when YARA ran on one side and not the other.

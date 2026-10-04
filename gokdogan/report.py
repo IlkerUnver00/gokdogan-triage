@@ -144,7 +144,9 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     ov = report.overlay
     if ov is not None and not ov.is_signature:
         header("Overlay")
-        stream.write(f"  {ov.size:,} bytes ({ov.pct}% of file) at offset 0x{ov.offset:x}, "
+        payload = ov.size if ov.payload_size is None else ov.payload_size
+        beside = f", {payload:,} outside the signature" if payload != ov.size else ""
+        stream.write(f"  {ov.size:,} bytes ({ov.pct}% of file) at offset 0x{ov.offset:x}{beside}, "
                      f"entropy {ov.entropy:.2f}\n")
         stream.write(f"  type: {ov.type_guess}")
         if ov.contains_pe:

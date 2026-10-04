@@ -8,7 +8,7 @@ an analyst can't argue with is a triage tool nobody trusts.
 from __future__ import annotations
 
 from .entropy import HIGH_ENTROPY_FILE
-from .loader import is_packing_anomaly
+from .loader import _LOW_IMPORTS, is_packing_anomaly
 from .models import Capability, ScoreEntry, TriageReport, Verdict, YaraHit
 from .overlay import MIN_HIDDEN_BYTES
 from .yara_scan import MAX_MATCHED
@@ -50,9 +50,37 @@ _IOC_CAP = 5
 
 # Capability severity -> points per capability.
 _CAP_POINTS = {1: 2, 2: 8, 3: 18}
+# Severity-3 capabilities whose evidence is weaker than their severity. GUI
+# frameworks hook and translate keys (MFC, DirectUI): on the benign tuning
+# sample keylogging was on 27 files against 13 of 295 malware samples, and it
+# flagged 23 of the 27. It stays severity 3 for the signature floor.
+_CAP_POINTS_BY_NAME = {"keylogging": 8}
+
+# Signals that say more when nobody vouches for the file (no valid signature).
+# A PE checksum that is set but stale means the bytes changed after linking:
+# 23% of malware, under 1% of benign files. A high-entropy payload appended
+# to an unsigned program is how droppers and crypters ship.
+_STALE_CHECKSUM = "PE header checksum does not match"
+_UNVOUCHED_POINTS = {_STALE_CHECKSUM: 12, "high-entropy overlay": 10}
 
 # YARA meta "severity" values -> points (rules may declare their own weight).
 _YARA_DEFAULT_POINTS = 15
+
+
+def _cap_points(cap: Capability) -> int:
+    return _CAP_POINTS_BY_NAME.get(cap.name, _CAP_POINTS.get(cap.severity, 2))
+
+
+def _credited(report: TriageReport) -> bool:
+    """The file earns the valid-signature credit: somebody vouches for these bytes."""
+    sig = report.signature
+    padded = report.overlay is not None and report.overlay.cert_padding >= MIN_HIDDEN_BYTES
+    return sig is not None and sig.status == "valid" and not padded
+
+
+def _unvouched_program(report: TriageReport) -> bool:
+    """A user-mode program (not a DLL, driver or boot image) nobody vouches for."""
+    return report.file.is_program and not _credited(report)
 
 
 def score_report(report: TriageReport) -> None:
@@ -72,16 +100,29 @@ def score_report(report: TriageReport) -> None:
     if report.overall_entropy >= HIGH_ENTROPY_FILE:
         add(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}"), is_packing=True)
 
+    tampered = report.signature is not None and report.signature.status == "tampered"
     for anomaly in report.anomalies:
         points = _WEAK_ANOMALY_POINTS if anomaly.startswith(_WEAK_ANOMALIES) else 6
+        if not _credited(report) and not tampered:   # tampered already scores 30 for this
+            points = next((p for text, p in _UNVOUCHED_POINTS.items() if anomaly.startswith(text)), points)
         add(ScoreEntry(points, f"anomaly: {anomaly}"), is_packing=is_packing_anomaly(anomaly))
+        # A program can only act through its imports or by resolving the API
+        # itself, as a shellcode stager or packer stub does: with five or fewer
+        # (or none) and nobody vouching for it, it is treated as packed. DLLs,
+        # drivers and IL-only .NET images legitimately import next to nothing.
+        if ((anomaly == "no import table" or _LOW_IMPORTS.fullmatch(anomaly))
+                and _unvouched_program(report) and not report.file.managed
+                and report.file.entry_point):
+            add(ScoreEntry(_PACKING_CAP - points, "program with almost no imports: "
+                                                  "the API is resolved at run time, treated as packed"),
+                is_packing=True)
 
     if report.file.compile_timestamp_anomaly:
         entries.append(ScoreEntry(5, report.file.compile_timestamp_anomaly))
 
     common_points = 0
     for cap in report.capabilities:
-        entry = ScoreEntry(_CAP_POINTS.get(cap.severity, 2), f"capability: {cap.name}")
+        entry = ScoreEntry(_cap_points(cap), f"capability: {cap.name}")
         entries.append(entry)
         if cap.severity <= 2 and cap.source in _STRUCTURAL_SOURCES:
             common_points += entry.points
@@ -99,7 +140,7 @@ def score_report(report: TriageReport) -> None:
         if cap is not None and _same_evidence(hit, cap):
             # One fact seen twice (an imported API name is also a string in the
             # file): count it once, at the higher of the two weights.
-            entries.append(ScoreEntry(max(0, points - _CAP_POINTS.get(cap.severity, 2)),
+            entries.append(ScoreEntry(max(0, points - _cap_points(cap)),
                                       f"YARA match: {hit.rule} (same evidence as capability "
                                       f"{cap.name}, counted once)"))
             continue
@@ -173,10 +214,13 @@ def score_report(report: TriageReport) -> None:
                                          "table carries unauthenticated data — no mitigation "
                                          "credit"))
         elif sig_valid and entries:
-            # A verified signature is a real mitigation. It is intentionally a
-            # flat credit that at most downgrades a sample one tier (it can never
-            # bridge the 30-point gap from HIGH_RISK to LIKELY_CLEAN), and a floor
-            # below stops it clearing a sample that carries a sev-3 capability.
+            # A verified signature is a real mitigation: a flat credit, and a
+            # floor below stops it clearing a sample that carries a sev-3
+            # capability. It also means somebody vouches for the file, so the
+            # rules for files nobody vouches for (the import-less packing
+            # entry, the unreadable-image floor, the 12/10 weights) never
+            # applied: compared with the same bytes unsigned, a valid signature
+            # can be worth more than one tier.
             entries.append(ScoreEntry(-15, f"Authenticode signature valid ({sig.signer or 'signed'})"))
         elif sig.status == "tampered":
             entries.append(ScoreEntry(30, "Authenticode digest mismatch — file modified after signing"))
@@ -196,9 +240,16 @@ def score_report(report: TriageReport) -> None:
     if sig_valid and any(c.severity == 3 for c in report.capabilities):
         pre_sig = sum(e.points for e in entries if not e.reason.startswith("Authenticode signature valid"))
         if pre_sig >= SUSPICIOUS_THRESHOLD and report.score < SUSPICIOUS_THRESHOLD:
-            report.score = SUSPICIOUS_THRESHOLD
-            report.score_breakdown.append(
-                ScoreEntry(0, "floor: valid signature does not clear a sev-3 capability"))
+            _floor(report, "floor: valid signature does not clear a sev-3 capability")
+
+    # An unknown crypter or bundle hides as much as a named packer, and the
+    # rule for those applies: a program nobody vouches for whose image is
+    # mostly ciphertext cannot be cleared statically. Only the image counts;
+    # an appended payload is weighed by the overlay checks.
+    if (_unvouched_program(report) and report.image_entropy >= HIGH_ENTROPY_FILE
+            and report.score < SUSPICIOUS_THRESHOLD):
+        _floor(report, f"floor: unreadable program nobody vouches for (image entropy "
+                       f"{report.image_entropy:.2f}) is not cleared statically")
 
     if report.score >= HIGH_RISK_THRESHOLD:
         report.verdict = Verdict.HIGH_RISK
@@ -206,6 +257,12 @@ def score_report(report: TriageReport) -> None:
         report.verdict = Verdict.SUSPICIOUS
     else:
         report.verdict = Verdict.LIKELY_CLEAN
+
+
+def _floor(report: TriageReport, reason: str) -> None:
+    """Raise the score to SUSPICIOUS, with the lift shown as an entry of its own."""
+    report.score_breakdown.append(ScoreEntry(SUSPICIOUS_THRESHOLD - report.score, reason))
+    report.score = SUSPICIOUS_THRESHOLD
 
 
 def _same_evidence(hit: YaraHit, cap: Capability) -> bool:

@@ -12,7 +12,7 @@ from .dotnet import analyze_dotnet, read_references
 from .entropy import shannon_entropy
 from .exports import parse_exports
 from .extractors import extract_config
-from .hashes import impfuzzy
+from .hashes import authentihash, impfuzzy
 from .loader import (
     NotAPEError,
     build_file_info,
@@ -31,6 +31,7 @@ from .packers import detect_packer
 from .resources import resource_anomalies, walk_resources
 from .rich import parse_rich_header
 from .signature import verify as verify_signature_file
+from .signature import verify_catalog
 from .stackstrings import recover_stackstrings
 from .strings_ext import analyze_strings
 from .verdict import score_report
@@ -85,6 +86,11 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
         file_info.impfuzzy = impfuzzy(imports)
         stack_strings = recover_stackstrings(pe)
         managed = is_managed(pe)
+        file_info.managed = managed
+        # A catalog lookup uses the hash of the bytes analysed here, never a
+        # second read of a file that may have changed since.
+        digests = ({"SHA256": file_info.authentihash or "", "SHA1": authentihash(pe, data, "sha1") or ""}
+                   if verify_signature and not file_info.is_signed else None)
     finally:
         pe.close()
 
@@ -96,7 +102,10 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
         signature = SignatureInfo(status="unverified", present=True,
                                   note="verification skipped")
     else:
-        signature = SignatureInfo(status="unsigned", present=False)
+        # No embedded signature: Windows may still vouch for the file through
+        # an installed catalog, as it does for most of what it ships.
+        signature = ((verify_catalog(str(path), digests) if verify_signature else None)
+                     or SignatureInfo(status="unsigned", present=False))
 
     if rich is not None and rich.checksum_valid is False:
         anomalies.append("Rich header checksum invalid (toolchain header forged or copied)")
@@ -166,6 +175,8 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
         delay_imports=sorted(delay.keys()),
         import_count=distinct_import_count(imports),
         overall_entropy=round(shannon_entropy(data), 3),
+        # An appended payload is judged on its own (overlay.py); this is the rest.
+        image_entropy=round(shannon_entropy(data[:overlay.offset] if overlay else data), 3),
         packer=packer,
         anomalies=anomalies,
         strings=string_hits,

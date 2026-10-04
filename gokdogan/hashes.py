@@ -18,8 +18,8 @@ import hashlib
 from .fuzzy import ssdeep_hash
 
 
-def authentihash(pe, data: bytes) -> str | None:
-    """SHA-256 authentihash (signature-independent PE hash)."""
+def authentihash(pe, data: bytes, algorithm: str = "sha256") -> str | None:
+    """Authentihash (signature-independent PE hash), SHA-256 unless asked otherwise."""
     try:
         opt_offset = pe.OPTIONAL_HEADER.get_file_offset()
         is_pe32_plus = pe.OPTIONAL_HEADER.Magic == 0x20B
@@ -33,7 +33,7 @@ def authentihash(pe, data: bytes) -> str | None:
     except Exception:  # pragma: no cover - defensive
         return None
 
-    h = hashlib.sha256()
+    h = hashlib.new(algorithm)
     # 1) start .. checksum
     h.update(data[:checksum_offset])
     # 2) after checksum .. cert-table directory entry

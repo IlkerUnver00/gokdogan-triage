@@ -27,7 +27,8 @@ def _file(**overrides) -> FileInfo:
     base = dict(path="sample.exe", size=180_000, md5="0" * 32, sha1="0" * 40, sha256="0" * 64,
                 imphash=None, ssdeep=None, tlsh=None, file_type="PE32 executable (GUI) x86",
                 compile_timestamp=None, compile_timestamp_anomaly=None, is_dll=False,
-                is_driver=False, is_signed=False, entry_point=0x1000, entry_section=".text")
+                is_driver=False, is_signed=False, entry_point=0x1000, entry_section=".text",
+                subsystem="GUI")
     base.update(overrides)
     return FileInfo(**base)
 
@@ -116,6 +117,7 @@ def packed_loader() -> TriageReport:
         file=_file(),
         packer=PackerInfo(detected=True, names=["UPX"]),
         overall_entropy=7.7,
+        image_entropy=7.7,
         anomalies=["section 'UPX0': W+X", "section 'UPX0': zero raw size (unpacking target)",
                    "section 'UPX1': W+X", "section 'UPX1': high-entropy executable section"],
         capabilities=[_cap("dynamic-api-resolution", 1)],

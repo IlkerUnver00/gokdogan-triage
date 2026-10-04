@@ -67,6 +67,7 @@ SKIP_NAMES = {"manifest.csv", "readme.txt", "readme.md"}
 SCORE_BINS = ((0, 0), (1, 9), (10, 19), (20, 29), (30, 39), (40, 59), (60, 10**6))
 THRESHOLDS = (10, 15, 20, 25, 30, 35, 40, 50, 60)
 SIGNATURE_CREDIT = 15  # what a valid Authenticode signature takes off (verdict.py)
+SEV3_BELOW_18 = {"capability: keylogging"}  # severity 3, fewer points (verdict._CAP_POINTS_BY_NAME)
 # Compression methods read with a bounded output: stored, deflate, and WinZip
 # AES around either (pyzipper). bzip2 and LZMA cannot be bounded, so a member
 # using them is skipped rather than risk a decompression bomb.
@@ -244,7 +245,10 @@ def _triage_sample(args: tuple[str, bool, bytes, int]) -> dict:
             row.update(error="not a PE (no MZ header)", not_pe=True)
         else:
             try:
-                row.update(report_fields(triage_bytes(data, name=sha, use_yara=use_yara), use_yara))
+                report = triage_bytes(data, name=sha, use_yara=use_yara)
+                row.update(report_fields(report, use_yara))
+                if report.file.is_signed:
+                    row["score_if_valid"] = _score_as_if_valid(report)
             except NotAPEError as exc:
                 row.update(error=f"MZ file the PE parser rejects ({exc})"[:300], unparsed=True)
             except Exception as exc:  # the engine failed on a PE: a miss for recall
@@ -357,14 +361,38 @@ def samples(rows: list[dict], manifest: dict[str, dict], holdout_fraction: float
             "counts": dict(sorted(counts.items()))}
 
 
+def _score_as_if_valid(report) -> int:
+    """The engine's own score for this report had its signature verified as
+    valid. The lab reads bytes, so no signature is ever checked; a valid one
+    takes 15 points off and also exempts the file from every rule for files
+    nobody vouches for."""
+    import copy
+
+    from gokdogan.models import SignatureInfo
+    from gokdogan.verdict import score_report
+
+    twin = copy.copy(report)
+    twin.signature = SignatureInfo(status="valid", present=True, verified=True, signer="assumed valid")
+    score_report(twin)
+    return twin.score
+
+
 def _score_if_signature_valid(row: dict) -> int:
-    """The score a signed sample would get with a valid signature (verdict.py):
-    15 points off, but never below SUSPICIOUS with a severity-3 capability."""
+    """The score a signed sample would get with a valid signature: the
+    engine's own (score_if_valid, recorded by the lab worker), or for rows
+    from older runs an estimate: 15 points off, but never below SUSPICIOUS
+    with a severity-3 capability."""
     if not row.get("signed"):
         return row["score"]
-    credited = max(0, row["score"] - SIGNATURE_CREDIT)
-    severe = any(p == 18 and reason.startswith("capability: ") for p, reason in row["breakdown"])
-    if severe and row["score"] >= SUSPICIOUS:
+    if "score_if_valid" in row:
+        return row["score_if_valid"]
+    # A floor lifts to SUSPICIOUS only a file nobody vouches for (or one whose
+    # sev-3 evidence already reached it): with a valid signature it is gone.
+    base = row["score"] - sum(p for p, reason in row["breakdown"] if reason.startswith("floor:"))
+    credited = max(0, base - SIGNATURE_CREDIT)
+    severe = any(reason.startswith("capability: ") and (p == 18 or reason in SEV3_BELOW_18)
+                 for p, reason in row["breakdown"])
+    if severe and base >= SUSPICIOUS:
         return max(credited, SUSPICIOUS)
     return credited
 

@@ -48,7 +48,7 @@ def test_packed_injector_is_high_risk():
         packer=PackerInfo(detected=True, names=["UPX"]),
         capabilities=[
             Capability("process-injection", "injects", 3, ["WriteProcessMemory"]),
-            Capability("keylogging", "keylogs", 3, ["GetAsyncKeyState"]),
+            Capability("credential-access", "steals", 3, ["CryptUnprotectData"]),
             Capability("network", "talks", 2, ["socket", "connect"]),
         ],
         anomalies=["no import table"],
@@ -56,6 +56,23 @@ def test_packed_injector_is_high_risk():
     score_report(report)
     assert report.verdict == Verdict.HIGH_RISK
     assert any("packer" in e.reason for e in report.score_breakdown)
+
+
+def test_keylogging_weighs_less_than_its_severity():
+    # GUI frameworks hook and translate keys: the tag is too common in benign
+    # software for 18 points, but it is still severity 3 for the signature floor.
+    report = TriageReport(file=_file_info(), capabilities=[
+        Capability("keylogging", "keylogs", 3, ["SetWindowsHookExW", "ToUnicodeEx"])])
+    score_report(report)
+    assert report.score == 8
+    signed = TriageReport(
+        file=_file_info(is_signed=True), signature=SignatureInfo(status="valid", present=True),
+        capabilities=[Capability("keylogging", "keylogs", 3, ["SetWindowsHookExW"]),
+                      Capability("process-injection", "injects", 3, ["WriteProcessMemory"]),
+                      Capability("network", "talks", 2, ["connect"])])
+    score_report(signed)                    # 8 + 18 + 8 = 34 - 15 = 19, floored
+    assert signed.score == SUSPICIOUS_THRESHOLD
+    assert sum(e.points for e in signed.score_breakdown) == signed.score
 
 
 def test_yara_weight_meta_is_honored():
@@ -339,3 +356,153 @@ def test_every_capability_string_is_compared_not_only_the_first_few():
                           capabilities=[_anti_recovery(logs)])
     score_report(report)
     assert report.score == 30
+
+
+# --- programs nobody vouches for --------------------------------------------
+
+def _program(**overrides):
+    return _file_info(subsystem="GUI", **overrides)
+
+
+def _valid():
+    return SignatureInfo(status="valid", present=True, verified=True, signer="Vendor")
+
+
+def test_a_program_with_almost_no_imports_is_treated_as_packed():
+    for anomaly in ("no import table", "only 1 imported functions (likely resolved at runtime)"):
+        report = TriageReport(file=_program(), anomalies=[anomaly])
+        score_report(report)
+        assert report.score == SUSPICIOUS_THRESHOLD, anomaly
+        assert sum(e.points for e in report.score_breakdown) == report.score
+    # inside the packing group: it never adds to a packer on its own
+    packed = TriageReport(file=_program(), packer=PackerInfo(detected=True, names=["UPX"]),
+                          anomalies=["no import table"])
+    score_report(packed)
+    assert packed.score == SUSPICIOUS_THRESHOLD
+
+
+def test_libraries_drivers_net_and_vouched_programs_may_import_little():
+    cases = {
+        "DLL": TriageReport(file=_program(is_dll=True), anomalies=["no import table"]),
+        "driver": TriageReport(file=_file_info(subsystem="native", is_driver=True),
+                               anomalies=["no import table"]),
+        "EFI": TriageReport(file=_file_info(subsystem="other"), anomalies=["no import table"]),
+        ".NET": TriageReport(file=_program(managed=True), anomalies=["no import table"]),
+        "no entry point": TriageReport(file=_program(entry_point=0), anomalies=["no import table"]),
+        "signed": TriageReport(file=_program(is_signed=True), signature=_valid(),
+                               anomalies=["no import table"]),
+    }
+    for name, report in cases.items():
+        score_report(report)
+        assert report.score < SUSPICIOUS_THRESHOLD, name
+
+
+def test_an_unreadable_program_nobody_vouches_for_is_not_cleared():
+    report = TriageReport(file=_program(), overall_entropy=7.6, image_entropy=7.6)
+    score_report(report)
+    assert report.verdict == Verdict.SUSPICIOUS
+    assert report.score_breakdown[-1].reason.startswith("floor: unreadable program")
+    assert sum(e.points for e in report.score_breakdown) == report.score
+    for name, kwargs in {
+        "DLL": dict(file=_program(is_dll=True)),
+        "signed": dict(file=_program(is_signed=True), signature=_valid()),
+        "driver": dict(file=_file_info(subsystem="native", is_driver=True)),
+    }.items():
+        other = TriageReport(overall_entropy=7.6, image_entropy=7.6, **kwargs)
+        score_report(other)
+        assert other.score < SUSPICIOUS_THRESHOLD, name
+    # the ciphertext is an appended payload: the overlay checks weigh it, not this floor
+    bundle = TriageReport(file=_program(), overall_entropy=7.9, image_entropy=6.1)
+    score_report(bundle)
+    assert bundle.score < SUSPICIOUS_THRESHOLD
+
+
+def test_a_padded_certificate_table_does_not_count_as_vouching():
+    padded = OverlayInfo(offset=1000, size=9000, pct=50.0, entropy=7.9, type_guess="unknown",
+                         contains_pe=False, is_signature=True, cert_padding=4096)
+    report = TriageReport(file=_program(is_signed=True), signature=_valid(), overlay=padded,
+                          overall_entropy=7.6, image_entropy=7.6)
+    score_report(report)
+    assert report.score >= SUSPICIOUS_THRESHOLD
+
+
+def test_stale_checksum_and_appended_ciphertext_weigh_more_without_a_signature():
+    anomalies = ["PE header checksum does not match computed checksum",
+                 "high-entropy overlay (500000 bytes, entropy 7.99)"]
+    unsigned = TriageReport(file=_file_info(is_dll=True), anomalies=list(anomalies))
+    score_report(unsigned)
+    assert [e.points for e in unsigned.score_breakdown] == [12, 10]
+    for status in ("valid", "tampered"):
+        signed = TriageReport(file=_file_info(is_dll=True, is_signed=True), anomalies=list(anomalies),
+                              signature=SignatureInfo(status=status, present=True))
+        score_report(signed)
+        assert [e.points for e in signed.score_breakdown[:2]] == [6, 6], status
+    # valid over a padded certificate table: it earns nothing, so it vouches for nothing
+    padded = OverlayInfo(offset=1000, size=9000, pct=50.0, entropy=7.9, type_guess="unknown",
+                         contains_pe=False, is_signature=False, cert_padding=4096)
+    unearned = TriageReport(file=_file_info(is_dll=True, is_signed=True), anomalies=list(anomalies),
+                            signature=SignatureInfo(status="valid", present=True), overlay=padded)
+    score_report(unearned)
+    assert [e.points for e in unearned.score_breakdown[:2]] == [12, 10]
+
+
+UNVOUCHED_STATUSES = [None, "unsigned", "unverified", "untrusted", "expired", "revoked",
+                      "invalid", "unavailable"]
+
+
+def _sig(status):
+    return None if status is None else SignatureInfo(status=status, present=status != "unsigned")
+
+
+def test_every_status_short_of_valid_is_nobody_vouching():
+    # The lab reads every signature as "unverified": these rules carry the
+    # recall gain there, so each status is pinned, not only "no signature".
+    for status in UNVOUCHED_STATUSES:
+        weights = TriageReport(file=_file_info(is_dll=True), signature=_sig(status), anomalies=[
+            "PE header checksum does not match computed checksum",
+            "high-entropy overlay (500000 bytes, entropy 7.99)"])
+        score_report(weights)
+        assert [e.points for e in weights.score_breakdown[:2]] == [12, 10], status
+        stager = TriageReport(file=_file_info(subsystem="console"), signature=_sig(status),
+                              anomalies=["only 2 imported functions (likely resolved at runtime)"])
+        score_report(stager)
+        assert any(e.reason.startswith("program with almost no imports") for e in stager.score_breakdown), status
+        crypted = TriageReport(file=_file_info(subsystem="console"), signature=_sig(status),
+                               overall_entropy=7.3, image_entropy=7.3)
+        score_report(crypted)
+        assert crypted.score >= SUSPICIOUS_THRESHOLD, status
+
+
+def test_a_signed_import_less_program_gets_no_packing_entry():
+    signed = TriageReport(file=_program(is_signed=True), signature=_valid(), anomalies=["no import table"])
+    score_report(signed)
+    assert signed.score == 0                     # 6 - 15, clamped
+    assert not any(e.reason.startswith("program with almost") for e in signed.score_breakdown)
+    padded = OverlayInfo(offset=1000, size=9000, pct=50.0, entropy=7.9, type_guess="unknown",
+                         contains_pe=False, is_signature=False, cert_padding=4096)
+    unearned = TriageReport(file=_program(is_signed=True), signature=_valid(), overlay=padded,
+                            anomalies=["no import table"])
+    score_report(unearned)                       # valid but padded: earns nothing, vouches for nothing
+    assert unearned.score >= SUSPICIOUS_THRESHOLD
+
+
+def test_the_image_floor_starts_at_seven():
+    for entropy, floored in ((7.0, True), (6.99, False)):
+        report = TriageReport(file=_file_info(subsystem="console"), overall_entropy=entropy,
+                              image_entropy=entropy)
+        score_report(report)
+        assert (report.score >= SUSPICIOUS_THRESHOLD) is floored, entropy
+
+
+def test_keylogging_still_holds_the_signature_floor_on_its_own():
+    # keylogging is the only severity-3 tag; with the other evidence the file
+    # reaches 30 before the credit, so a valid signature must not clear it
+    report = TriageReport(
+        file=_file_info(is_signed=True), signature=_valid(),
+        capabilities=[Capability("keylogging", "keylogs", 3, ["SetWindowsHookExW"]),
+                      Capability("network", "talks", 2, ["connect"]),
+                      Capability("screen-capture", "looks", 2, ["BitBlt"]),
+                      Capability("clipboard-access", "reads", 2, ["GetClipboardData"])])
+    score_report(report)                         # 8 + 8 + 8 + 8 = 32 - 15 = 17, floored
+    assert report.score == SUSPICIOUS_THRESHOLD
+    assert report.score_breakdown[-1].reason.startswith("floor: valid signature")
