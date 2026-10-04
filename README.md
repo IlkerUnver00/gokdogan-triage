@@ -256,10 +256,10 @@ gokdogan triage report — invoice_scan.exe
 ── Verdict ───────────────────────────────────────────────
   +15  packer detected: UPX
   +18  capability: process-injection
-  +18  capability: keylogging
+   +8  capability: keylogging
    +5  compile timestamp is in the future
   ...
-  HIGH RISK  (score 74, thresholds: suspicious ≥ 30, high risk ≥ 60)
+  HIGH RISK  (score 64, thresholds: suspicious ≥ 30, high risk ≥ 60)
 ```
 
 The same triage rendered as a self-contained HTML case file (`--html`):
@@ -375,7 +375,10 @@ gokdogan/
         size-aware capability cap, reproducible-build timestamps
   - [x] detection guard: synthetic malware-shaped reports keep their verdicts
   - [x] detection benchmark harness (`scripts/recall_sweep.py`, [BENCHMARK.md](BENCHMARK.md))
-  - [ ] recall on a labelled malware corpus (isolated lab)
+  - [x] recall on a labelled malware corpus (isolated lab): 55.3% of the held-out part
+  - [x] confirm the scoring changes made from that run's tuning part in a second run:
+        71.3% of the same held-out part, nothing the first run flagged lost
+  - [ ] recall on a corpus first seen after the rules were frozen
   - [ ] a second machine and software mix for the false-positive rate
 
 ## What gokdogan does not do
@@ -411,7 +414,7 @@ analysts already rely on, and its edges are worth stating plainly:
   all core Microsoft-signed assemblies such as `System.dll` and
   `System.Core.dll`, held there by the rule that a valid signature never
   clears a severity-3 tag; the PowerShell engine scores `HIGH_RISK`.
-- **False positives are measured on one machine; recall is not measured.**
+- **False positives are measured on one machine, recall on one corpus.**
   [`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
   files and counts every verdict above `LIKELY_CLEAN` as a false positive
   (installed software is assumed benign; nothing was checked against a
@@ -424,22 +427,34 @@ analysts already rely on, and its edges are worth stating plainly:
   quote comes from a second sample of 2,694 other files from the same
   machine that played no part in tuning: v0.5.2 12.7% / 2.2%, this release
   2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%); with
-  the .NET stage added since, 2.2% / 0.22% (60 and 6 files). On
+  the .NET stage added since, 2.2% / 0.22% (60 and 6 files), and with the
+  scoring changes in [Unreleased](CHANGELOG.md) 1.7% / 0.11% (46 and 3 of
+  2,674 files still on disk). On
   native PE files, which the import-based rules actually analyse, it is
   3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
   The machine is not a typical workload: most third-party files come from
   two forensic suites, installers are almost absent, and files over 12 MB
-  were not scanned. Recall on real malware has not been measured: the test
-  suite only checks that synthetic malware-shaped reports keep their
-  verdicts through tuning. Treat the verdict as a prioritisation signal.
+  were not scanned. Recall was measured in an isolated lab on four
+  MalwareBazaar daily batches (445 EXE/DLL samples of 75 families): 55.3% of
+  the held-out part (83/150) at `SUSPICIOUS` or worse before the scoring
+  changes in [Unreleased](CHANGELOG.md), made from the tuning part only, and
+  71.3% (107/150) after them. Most of the newly flagged samples score
+  exactly 30, so the gain sits at the `SUSPICIOUS` line. Family labels are
+  noisy, the corpus spans four days and most of its families appear on both
+  sides of the split, and the lab cannot verify signatures (had every one
+  been valid: 64.0%). Treat the verdict as a prioritisation signal.
 - **Padding the import table buys the size cap.** Common capability tags
   are capped in programs that import 200 or more distinct functions, because
   that is where benign software stacks them. A sample that links 200 real
   functions gets the cap too; duplicate and delay-load entries do not count,
-  and severity-3 tags (injection, keylogging, download-and-execute, dropper)
-  always count in full.
-- **Signature verification is Windows-only.** Elsewhere the Authenticode
-  status is `unavailable`, so the same file can score differently.
+  and severity-3 tags (injection, download-and-execute, dropper; keylogging
+  at 8 points) always count in full.
+- **Signature verification is Windows-only.** On Windows a file without an
+  embedded signature is also checked against the installed catalogs, which
+  is how Windows signs most of its own files. Elsewhere an embedded
+  signature reads `unavailable` and a catalog-signed file `unsigned`, so the
+  same file can score differently: a Windows system program read on Linux
+  looks like a program nobody vouches for.
 - **Certificate-table checks are deliberately strict.** Anything in the
   Authenticode certificate table beyond the signature itself (16 bytes or
   more) is reported and cancels the signature credit, including a second,
@@ -455,7 +470,7 @@ analysts already rely on, and its edges are worth stating plainly:
 pytest -v
 ```
 
-256 tests: unit tests cover each analyzer in isolation with synthetic
+345 tests: unit tests cover each analyzer in isolation with synthetic
 inputs. The integration suite runs the full pipeline against real system
 binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and, where installed, a
 signed `chrome.exe`) and asserts none scores `HIGH_RISK` or trips the

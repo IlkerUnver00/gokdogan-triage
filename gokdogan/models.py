@@ -39,6 +39,13 @@ class FileInfo:
     entry_section: str | None
     authentihash: str | None = None  # signature-independent PE hash (clustering)
     impfuzzy: str | None = None      # ssdeep of the import list (clustering)
+    subsystem: str = ""     # "GUI", "console", "native" or "other"
+    managed: bool = False   # a structurally valid IL-only .NET image (loader.is_managed)
+
+    @property
+    def is_program(self) -> bool:
+        """A user-mode executable: not a DLL, a driver, an EFI or a boot image."""
+        return not self.is_dll and self.subsystem in ("GUI", "console")
 
 
 @dataclass
@@ -68,6 +75,9 @@ class OverlayInfo:
     contains_pe: bool
     is_signature: bool   # overlay is (just) the Authenticode blob
     cert_padding: int = 0  # bytes hidden in the certificate table after the PKCS#7 blob
+    # Overlay bytes outside the certificate table (None: all of it). The type,
+    # entropy and embedded-PE tests read only these: the signature is not a payload.
+    payload_size: int | None = None
 
 
 @dataclass
@@ -231,6 +241,7 @@ class TriageReport:
     delay_imports: list[str] = field(default_factory=list)  # delay-loaded DLL names
     import_count: int = 0  # distinct functions in the normal import table (no delay-load)
     overall_entropy: float = 0.0
+    image_entropy: float = 0.0  # entropy of the file without its overlay (the mapped image)
     packer: PackerInfo = field(default_factory=lambda: PackerInfo(detected=False))
     anomalies: list[str] = field(default_factory=list)
     strings: list[StringHit] = field(default_factory=list)

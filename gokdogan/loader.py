@@ -196,6 +196,7 @@ def build_file_info(path: str | Path, pe: pefile.PE, data: bytes) -> FileInfo:
         entry_point=pe.OPTIONAL_HEADER.AddressOfEntryPoint,
         entry_section=_entry_section(pe),
         authentihash=authentihash(pe, data),
+        subsystem=subsystem,
     )
 
 

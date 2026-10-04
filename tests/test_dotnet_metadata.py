@@ -102,6 +102,7 @@ def test_dnfile_warnings_do_not_configure_logging():
 @needs_net
 def test_triage_reports_pinvoke_and_member_refs():
     report = triage(SYSTEM_NET, verify_signature=False)
+    assert report.file.managed and not report.file.is_program   # an IL-only DLL
     d = report.dotnet
     assert d.member_refs > 100 and d.pinvoke_count >= len(d.pinvoke) > 0
     assert d.pinvoke_called is not None and d.pinvoke_called <= d.pinvoke_count

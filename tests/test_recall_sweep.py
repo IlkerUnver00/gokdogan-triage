@@ -53,6 +53,57 @@ def test_signature_bound_follows_the_verdict_rules():
     assert rs._score_if_signature_valid(_row(40, signed=True)) == 25         # -15
     assert rs._score_if_signature_valid(_row(36, signed=True, severe=True)) == 30  # sev-3 floor
     assert rs._score_if_signature_valid(_row(20, signed=True, severe=True)) == 5   # floor needs >= 30
+    # a floor for files nobody vouches for does not survive a valid signature
+    floored = _row(30, signed=True, severe=True)
+    floored["breakdown"] = [[18, "capability: process-injection"],
+                            [12, "floor: unreadable program nobody vouches for (image entropy 7.40)"]]
+    assert rs._score_if_signature_valid(floored) == 3
+    keylogger = _row(36, signed=True)
+    keylogger["breakdown"] = [[8, "capability: keylogging"], [28, "anomaly: x"]]   # sev 3 at 8 points
+    assert rs._score_if_signature_valid(keylogger) == 30
+    # rows from this version carry the engine's own answer
+    assert rs._score_if_signature_valid(dict(_row(62, signed=True), score_if_valid=7)) == 7
+
+
+def test_the_lab_asks_the_engine_what_a_valid_signature_would_change():
+    # A signed stager as the lab sees it (signature unverified): nobody
+    # vouches for it, so it is treated as packed and its checksum weighs 12.
+    from gokdogan.models import FileInfo, SignatureInfo, TriageReport
+    from gokdogan.verdict import score_report
+    info = FileInfo(path="x", size=1, md5="", sha1="", sha256="0" * 64, imphash=None, ssdeep=None,
+                    tlsh=None, file_type="", compile_timestamp=None, compile_timestamp_anomaly=None,
+                    is_dll=False, is_driver=False, is_signed=True, entry_point=0x1000, entry_section=".text",
+                    subsystem="GUI")
+    report = TriageReport(file=info, signature=SignatureInfo(status="unverified", present=True),
+                          anomalies=["only 2 imported functions (likely resolved at runtime)",
+                                     "PE header checksum does not match computed checksum"])
+    score_report(report)
+    assert report.score == 30 + 12
+    # with a valid signature: no packing entry, checksum 6, minus 15
+    assert rs._score_as_if_valid(report) == 0
+    assert report.score == 42 and report.signature.status == "unverified"   # the report is untouched
+
+
+def test_the_lab_worker_records_the_score_a_valid_signature_would_give(tmp_path, monkeypatch):
+    import gokdogan.engine
+    from gokdogan.models import FileInfo, SignatureInfo, TriageReport
+    from gokdogan.verdict import score_report
+
+    def signed_report(data, name="", use_yara=True):
+        info = FileInfo(path=name, size=len(data), md5="", sha1="", sha256=name, imphash=None, ssdeep=None,
+                        tlsh=None, file_type="", compile_timestamp=None, compile_timestamp_anomaly=None,
+                        is_dll=False, is_driver=False, is_signed=True, entry_point=0x1000,
+                        entry_section=".text", subsystem="GUI")
+        report = TriageReport(file=info, signature=SignatureInfo(status="unverified", present=True),
+                              anomalies=["no import table"])
+        score_report(report)
+        return report
+
+    monkeypatch.setattr(gokdogan.engine, "triage_bytes", signed_report)
+    sample = tmp_path / "s.exe"
+    sample.write_bytes(b"MZ" + bytes(100))
+    row = rs._triage_sample((str(sample), False, b"infected", 1 << 20))
+    assert row["score"] == 30 and row["score_if_valid"] == 0
 
 
 def _zip(path, members, compression=zipfile.ZIP_DEFLATED):
@@ -612,6 +663,18 @@ LAUNCHER = _vendored_pe()
 
 
 @pytest.mark.skipif(LAUNCHER is None, reason="pip's vendored launcher (a benign PE) not found")
+def test_image_entropy_leaves_out_an_appended_payload():
+    # Appended ciphertext is the overlay checks' business: the floor for
+    # unreadable programs looks at the image only (in memory, nothing on disk).
+    from gokdogan.engine import triage_bytes
+    noise = b"".join(hashlib.sha256(i.to_bytes(4, "little")).digest() for i in range(8000))
+    report = triage_bytes(LAUNCHER.read_bytes() + noise, use_yara=False)
+    assert report.image_entropy < 7.0 <= report.overall_entropy
+    assert report.file.is_program and not report.file.managed
+    assert not any(e.reason.startswith("floor: unreadable") for e in report.score_breakdown)
+
+
+@pytest.mark.skipif(LAUNCHER is None, reason="pip's vendored launcher (a benign PE) not found")
 def test_a_real_pe_goes_through_the_recall_run_with_yara_when_installed(tmp_path):
     # On Linux every other test that triages a PE needs Windows' own files:
     # this is the one that checks the engine, and YARA, where the lab runs.
@@ -630,6 +693,10 @@ def test_a_real_pe_goes_through_the_recall_run_with_yara_when_installed(tmp_path
     assert len(rows) == 1 and "error" not in rows[0]
     assert rows[0]["sha256"] == hashlib.sha256(LAUNCHER.read_bytes()).hexdigest()
     assert rows[0]["yara"] is use_yara and rows[0]["verdict"] in ("LIKELY_CLEAN", "SUSPICIOUS", "HIGH_RISK")
+    # the structure a later analysis needs without another lab run
+    features = rows[0]["features"]
+    assert features["subsystem"] == "console" and features["import_count"] > 0
+    assert features["sections"] and features["image_entropy"] <= 8
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symbolic links need privileges on Windows")

@@ -46,6 +46,30 @@ def test_tampered_binary_detected(tmp_path):
     assert info.verified is False
 
 
+CATALOGUED = Path(r"C:\Windows\System32\cmd.exe")   # signed through a Windows catalog only
+
+
+@pytest.mark.skipif(not is_windows or not CATALOGUED.exists(), reason="needs Windows")
+def test_windows_vouches_for_its_own_files_through_catalogs(tmp_path):
+    from gokdogan.engine import triage
+    from gokdogan.signature import verify_catalog
+    assert verify(str(CATALOGUED)).status == "unsigned"         # no embedded signature
+    info = verify_catalog(str(CATALOGUED))
+    assert info.status == "valid" and info.verified and "Microsoft" in info.signer
+    assert info.note.startswith("Windows catalog signature")
+    assert triage(CATALOGUED, use_yara=False).signature.status == "valid"
+    assert triage(CATALOGUED, use_yara=False, verify_signature=False).signature.status == "unsigned"
+    stray = tmp_path / "stray.txt"
+    stray.write_bytes(b"listed in no catalog")
+    assert verify_catalog(str(stray)) is None
+
+
+def test_catalogs_are_a_windows_feature(monkeypatch):
+    from gokdogan.signature import verify_catalog
+    monkeypatch.setattr(signature, "_IS_WINDOWS", False)
+    assert verify_catalog("whatever.exe") is None
+
+
 @pytest.mark.skipif(not is_windows, reason="needs Windows")
 def test_unsigned_or_catalog_binary(tmp_path):
     # a bare file with no embedded Authenticode -> unsigned

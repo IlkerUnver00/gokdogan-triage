@@ -152,36 +152,93 @@ def cert_table_padding(pe: pefile.PE, data: bytes) -> int:
     return _cert_table_slack(data[start:start + size])
 
 
+# Fewer bytes than this outside the certificate table are slack, not a
+# payload: a file type or an entropy read from them means nothing.
+MIN_PAYLOAD = 1024
+
+
+def _cert_table(pe: pefile.PE, data: bytes, offset: int) -> tuple[int, int] | None:
+    """(start, end) file offsets of a certificate table that lies in the
+    overlay and inside the file, or None. A table that runs past the end of
+    the file is not one: its bytes stay payload, so a forged Size cannot
+    hide an appended file."""
+    security_dir = data_directory(pe, "IMAGE_DIRECTORY_ENTRY_SECURITY")
+    if security_dir is None or not security_dir.VirtualAddress or not security_dir.Size:
+        return None
+    # The security directory's VirtualAddress is a file offset, not an RVA.
+    start, end = security_dir.VirtualAddress, security_dir.VirtualAddress + security_dir.Size
+    if end > len(data) or end <= offset or security_dir.Size < 8:
+        return None
+    # It must at least open like a WIN_CERTIFICATE, so that a few forged bytes
+    # cannot be declared "the table" and cut the head off an appended file.
+    length = int.from_bytes(data[start:start + 4], "little")
+    revision = int.from_bytes(data[start + 4:start + 6], "little")
+    if not 8 <= length <= security_dir.Size or revision not in (0x0100, 0x0200):
+        return None
+    return max(start, offset), end
+
+
+def _has_pe(chunk: bytes) -> bool:
+    return chunk[:2] == b"MZ" or _DOS_STUB in chunk[:4096]
+
+
 def analyze_overlay(pe: pefile.PE, data: bytes) -> OverlayInfo | None:
-    """Return an OverlayInfo, or None if the file has no overlay."""
+    """Return an OverlayInfo, or None if the file has no overlay.
+
+    The Authenticode certificate table usually lives in the overlay. It is
+    the signature, not a payload, so the type, entropy and embedded-PE tests
+    read the rest (the payload): measured with the table, a signed file with
+    a few bytes of alignment before it read as a "high-entropy overlay", and
+    149 of the 152 such notes on 2,845 benign files were that. Data hidden
+    inside the table is cert_table_padding's business, and an executable in
+    it is still reported.
+    """
     try:
         offset = pe.get_overlay_data_start_offset()
     except Exception:  # pragma: no cover - defensive
         offset = None
     if offset is None or offset >= len(data):
         return None
+    size = len(data) - offset
 
-    overlay = data[offset:]
-    size = len(overlay)
-    if size == 0:
-        return None
+    table = _cert_table(pe, data, offset)
+    padding = cert_table_padding(pe, data)
+    if table is None:
+        before, after, pe_in_table = data[offset:], b"", False
+    else:
+        before, after = data[offset:table[0]], data[table[1]:]
+        # A certificate never contains an executable; one hidden in the table
+        # is a payload whether or not it sits after the signature blob.
+        pe_in_table = _DOS_STUB in data[table[0]:table[1]]
+    payload_size = len(before) + len(after)
+    # "Just the signature": a table in the overlay, nothing hidden in it and
+    # nothing (or a few alignment bytes) beside it.
+    is_signature = (table is not None and payload_size <= 16 and not pe_in_table
+                    and padding < MIN_HIDDEN_BYTES)
 
-    # The security directory blob legitimately lives in the overlay.
-    security_dir = data_directory(pe, "IMAGE_DIRECTORY_ENTRY_SECURITY")
-    signature_size = security_dir.Size if security_dir is not None else 0
-    is_signature = size <= max(signature_size, 0) + 16
-
-    contains_pe = overlay[:2] == b"MZ" or _DOS_STUB in overlay[:4096]
+    # The type is read where a payload starts: before the table when that
+    # part is big enough to be one, otherwise after it. A few bytes of slack
+    # have no type.
+    type_guess = "unknown"
+    if payload_size >= MIN_PAYLOAD:
+        type_guess = _type_guess(before) if len(before) >= MIN_PAYLOAD else "unknown"
+        if type_guess == "unknown" and after:
+            type_guess = _type_guess(after)
+        if type_guess == "unknown" and before:
+            type_guess = _type_guess(before)
+    payload = before + after if before and after else (before or after)
 
     return OverlayInfo(
         offset=offset,
         size=size,
         pct=round(100 * size / len(data), 1),
-        entropy=round(shannon_entropy(overlay), 3),
-        type_guess=_type_guess(overlay),
-        contains_pe=contains_pe,
+        entropy=round(shannon_entropy(payload), 3) + 0.0 if payload else 0.0,   # never -0.0
+        type_guess=type_guess,
+        contains_pe=(_has_pe(data[offset:offset + 4096]) or _has_pe(before) or _has_pe(after)
+                     or pe_in_table),
         is_signature=is_signature,
-        cert_padding=cert_table_padding(pe, data),
+        cert_padding=padding,
+        payload_size=payload_size,
     )
 
 
@@ -194,10 +251,14 @@ def overlay_anomalies(info: OverlayInfo | None) -> list[str]:
                      "Authenticode certificate table (CVE-2013-3900)")
     if info.is_signature:
         return notes
+    payload = info.size if info.payload_size is None else info.payload_size
     if info.contains_pe:
         notes.append(f"overlay contains an embedded executable ({info.size} bytes)")
+    elif payload < MIN_PAYLOAD:
+        pass
     elif info.type_guess != "unknown":
-        notes.append(f"overlay is a {info.type_guess} ({info.size} bytes, {info.pct}% of file)")
+        share = info.pct if payload == info.size else round(info.pct * payload / info.size, 1)
+        notes.append(f"overlay is a {info.type_guess} ({payload} bytes, {share}% of file)")
     elif info.entropy >= 7.2:
-        notes.append(f"high-entropy overlay ({info.size} bytes, entropy {info.entropy:.2f})")
+        notes.append(f"high-entropy overlay ({payload} bytes, entropy {info.entropy:.2f})")
     return notes

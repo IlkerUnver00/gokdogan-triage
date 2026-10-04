@@ -249,6 +249,11 @@ def _config_extractions(report: TriageReport) -> str:
             f"<tr><th>family</th><th>key</th><th>value</th></tr>{rows}</table></div>")
 
 
+def _beside_signature(ov) -> str:
+    payload = ov.size if ov.payload_size is None else ov.payload_size
+    return f", {payload:,} outside the signature" if payload != ov.size else ""
+
+
 def _overlay(report: TriageReport) -> str:
     ov = report.overlay
     if ov is None or ov.is_signature:
@@ -257,7 +262,8 @@ def _overlay(report: TriageReport) -> str:
           if ov.contains_pe else "")
     return ("<h2>Overlay</h2><div class='card'>"
             f"<div>{ov.size:,} bytes ({ov.pct}% of file) at offset "
-            f"<span class='mono'>0x{ov.offset:x}</span>, entropy {ov.entropy:.2f}</div>"
+            f"<span class='mono'>0x{ov.offset:x}</span>{_beside_signature(ov)}, "
+            f"entropy {ov.entropy:.2f}</div>"
             f"<div>type: <b>{_esc(ov.type_guess)}</b>{pe}</div></div>")
 
 

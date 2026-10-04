@@ -6,7 +6,84 @@ All notable changes to **gokdogan** are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — scoring, from the first recall measurement
+The first recall run, in an isolated lab over four MalwareBazaar daily
+batches (445 EXE/DLL samples of 75 families: the manifest built at lab time
+from an export updated since our test build, which had 440), flagged 55.3%
+of its held-out part (83/150) at `SUSPICIOUS` or worse, against 2.2% of
+held-out benign files. Four lenses proposed changes on the tuning parts
+only (295 malware samples, 2,845 benign files); each was recomputed and
+attacked by an independent reviewer, and the implementation was reviewed
+again. These were kept. "Nobody vouches for" below means a GUI or console
+program (not a DLL, driver or boot image) with no valid signature:
+- **A program nobody vouches for whose image is mostly ciphertext**
+  (entropy 7.0 or more over the file without its overlay) is not cleared:
+  it is raised to `SUSPICIOUS`, the engine's existing rule for named
+  packers applied to unknown crypters.
+- **A program nobody vouches for with almost no imports** (five or fewer,
+  or none, and an entry point) is treated as packed: the API is resolved at
+  run time, as shellcode stagers and packer stubs do. IL-only .NET images
+  are exempt.
+- **Keylogging** scores 8 instead of 18 (still severity 3 for the
+  signature floor): GUI frameworks hook and translate keys, and the tag
+  was on 27 benign files against 13 malware samples.
+- **A stale PE checksum** scores 12 and **a high-entropy overlay** 10 in any
+  file (DLLs and drivers too) without the signature credit, unless its
+  signature is tampered (which already scores 30); 6 otherwise.
+- **Windows catalog signatures count.** Most files Windows ships carry no
+  embedded signature: a signed catalog lists their hashes. On Windows a
+  file without an embedded signature is now checked against the installed
+  catalogs (offline, as Explorer does), using the hash of the bytes the
+  engine analysed, and a match is a valid signature. Without it, the rules
+  above flagged 18 of Windows' own 32-bit programs. Reading a signer's name
+  no longer leaks the decoded signature (hundreds of KB per catalog) in a
+  long-running process.
+- **The certificate table is no longer read as an overlay payload**:
+  measured with the rest, a signed file with a few bytes of slack before
+  its table looked like a "high-entropy overlay" (149 of 152 benign
+  carriers). A table that runs past the end of the file no longer hides an
+  appended one, and an executable hidden inside the table is still
+  reported. Reports show the overlay bytes outside the signature.
+- Floors show the points they add as an entry of their own.
+
+Benign files, measured at this code: tuning sample 2.21% -> 1.86% (one file
+newly flagged, eleven cleared; 847 of the 2,845 files now verified through a
+catalog), held-out sample 2.17% -> 1.72% over the files still on disk at
+the same paths (58 of 2,675 -> 46 of 2,674 distinct files; `HIGH_RISK`
+6 -> 3; 12 of those paths hold a file updated between the two sweeps, and
+on the 2,663 files both sweeps scored it is 56 -> 44), and Windows' 32-bit
+programs (`SysWOW64`, 2,998 files, swept one build earlier, which scores
+every file of both benign samples the same) 3.3% -> 2.3% with none newly
+flagged.
+
+Malware, measured in a second lab run at this code over the same 445
+samples and the same hash split: held-out 55.3% -> **71.3%** (83 -> 107 of
+150; 95% interval 63.6–78.0%). Nothing run 1 flagged was missed (24 gained,
+0 lost), each of the four daily batches improved, and no family went down.
+Samples of one family can be near-identical builds (7 of the 24 gains are
+BlackMatter, 6 of them probably one build), so the interval for the gain
+resamples families: +8 to +26 points. 21 of the 24 gains score exactly 30
+(17 of them lifted by the new floor), and `HIGH_RISK` fell from 26 to 22
+(keylogging now scores 8, not 18). Had every signature been valid (the lab
+cannot verify them): 64.0%. Tuning part 51.9% -> 71.2% (210/295; the
+recompute had predicted 209).
+
+Rejected or deferred: raising the zero-timestamp and
+embedded-config weights (they are the Go toolchain's fingerprint: 31
+benign Go programs on the test machine score like the missed Go loaders,
+and the benign samples, capped at 12 MB, hold none), a floor for unsigned
+programs with a stale checksum alone, a lower threshold (28 or 25: more
+benign files per malware sample gained), and a floor for appended
+ciphertext (unsigned PyInstaller-style bundles look the same).
+
+
 ### Added
+- The sweeps record each file's structure (`features`: subsystem, import
+  count, sections, resources, overlay, entropies, string counts) so the
+  next analysis can weigh features the score does not use without another
+  lab run. The lab worker also scores every signed sample as if its
+  signature were valid (`score_if_valid`), so "had every signature been
+  valid" comes from the engine instead of an estimate.
 - `scripts/bazaar_manifest.py` builds the recall manifest from
   MalwareBazaar's CSV export for the days whose daily batches make up the
   corpus: EXE and DLL only, capped per family (spellings of one family

@@ -319,6 +319,30 @@ def report_fields(report, use_yara: bool) -> dict:
         dotnet=report.dotnet is not None,
         packed=report.packer.detected,
         breakdown=[[e.points, e.reason] for e in report.score_breakdown],
+        # Structure, so a later analysis can weigh features the score does not
+        # use yet without another lab run.
+        features=_features(report),
+    )
+
+
+def _features(report) -> dict:
+    f, ov = report.file, report.overlay
+    resource_types = sorted({r.type for r in report.resources})
+    return dict(
+        subsystem=getattr(f, "subsystem", ""), managed=getattr(f, "managed", False),
+        is_driver=f.is_driver, entry_point=f.entry_point, entry_section=f.entry_section,
+        import_count=getattr(report, "import_count", None),   # older engines (--engine) lack some
+        delay_imports=len(getattr(report, "delay_imports", [])),
+        overall_entropy=report.overall_entropy, image_entropy=getattr(report, "image_entropy", None),
+        compile_timestamp=f.compile_timestamp, rich_header=report.rich is not None,
+        resources=len(report.resources), resource_types=resource_types[:20],
+        version_info="RT_VERSION" in resource_types, manifest="RT_MANIFEST" in resource_types,
+        overlay=None if ov is None else dict(
+            size=ov.size, payload=getattr(ov, "payload_size", None), entropy=ov.entropy,
+            type=ov.type_guess, signature_only=ov.is_signature),
+        sections=[[s.name, s.raw_size, s.virtual_size, s.entropy, s.is_executable, s.is_writable]
+                  for s in report.sections[:32]],
+        string_stats=dict(report.string_stats),
     )
 
 

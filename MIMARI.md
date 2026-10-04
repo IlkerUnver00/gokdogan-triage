@@ -9,7 +9,7 @@
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
 - 31 odaklı modülde **~5.200 satır** Python
-- **~2.950 satır** test · **256 test** · gerçek binary entegrasyon paketi
+- **~4.300 satır** test · **345 test** · gerçek binary entegrasyon paketi
 - Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %2,2'si işaretleniyor (v0.5.2'de %12,7)
 - Zorunlu bağımlılık: `pefile`, `ppdeep`, `dnfile` · opsiyonel: `yara-python`, `py-tlsh`
 
@@ -201,15 +201,25 @@ korkulukları gösterir. Temsili ağırlıklar:
 | Packer tespit edildi | +15 |
 | Yüksek genel entropi (≥ 7,0) | +10 |
 | Her yapısal anomali | +6 (TLS callback +2) |
-| Capability (şiddet 1 / 2 / 3) | +2 / +8 / +18 |
+| Bayat PE sağlama toplamı / yüksek entropili overlay, imza kredisi olmayan herhangi bir dosyada | +12 / +10 (aksi halde +6) |
+| Capability (şiddet 1 / 2 / 3) | +2 / +8 / +18 (keylogging +8) |
 | YARA eşleşmesi | kural `meta.weight`, varsayılan +15 |
 | Ağ IOC string'leri | her biri +1, en fazla +5 |
 | Kurtarılmış kodlu IOC/payload | +24'e kadar |
-| Geçerli Authenticode imzası | −15; sertifika tablosunda doğrulanmamış veri varsa 0 |
+| Geçerli Authenticode imzası, gömülü ya da Windows kataloğu üzerinden | −15; sertifika tablosunda doğrulanmamış veri varsa 0 |
 | İmza var ama geçerli değil (self-signed, süresi dolmuş, doğrulanmamış) | 0 |
 | Paketleme sinyalleri birlikte (packer, entropi, packer YARA, stub anomalileri) | en fazla 30 |
+| Kimsenin kefil olmadığı, beş ya da daha az import'lu program | paketleme grubuna tavanı olan 30 ile girer |
+| Kimsenin kefil olmadığı, imajının (overlay hariç dosya) entropisi ≥ 7,0 olan program | 30'a yükseltilir |
 | Import/export'tan okunan şiddet 1–2 capability'ler, ≥ 200 fonksiyon import eden dosyada | birlikte en fazla 16 |
 | `meta.overlaps` ile adı verilen capability ile aynı eşleşen metni okuyan YARA kuralı | yalnızca o capability'nin puanını aşan kısım |
+
+"Kimsenin kefil olmadığı" geçerli imzası olmayan bir GUI ya da konsol programı
+demektir (DLL, sürücü ya da önyükleme imajı değil). İki program kuralı ilk
+recall ölçümünden geldi: bilinmeyen bir crypter ya da API'sini çalışma anında
+çözen bir stager, adı bilinen bir packer kadar opaktır ve motorun onlar için
+koyduğu kural (paketleme tek başına `SUSPICIOUS`'a yönlendirir) artık bunları
+da kapsar.
 
 Eşikler: **`SUSPICIOUS` ≥ 30**, **`HIGH_RISK` ≥ 60**. Tam döküm her raporda
 basılır — analist bir örneğin neden o skoru aldığını tam olarak görür ve YARA
@@ -221,7 +231,7 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**256 test / ~2.950 satır.** Birim testleri her analizciyi sentetik girdilerle
+**345 test / ~4.300 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
 ekilmiş entropi adaları, sentetik sertifika tabloları, sınıflandırmayı bir
 zamanlar karesel yapan düşmanca string'ler). Entegrasyon paketi tüm boru
@@ -238,8 +248,13 @@ Yanlış-pozitif benchmark'ı `pytest`'in parçası değil, ayrı bir betiktir:
 [`scripts/benign_sweep.py`](scripts/benign_sweep.py) yüklü PE dosyalarını
 triyaj eder, her birini zararsız sayar ve işaretleme oranını, arkasındaki
 gerekçeleri ve en kötü dosyaları raporlar. Benchmark'ın yalnızca zararsız
-yarısını ölçer; gerçek malware üzerinde recall, izole bir laboratuvarda
-etiketli bir korpus gerektirir ve henüz ölçülmedi.
+yarısını ölçer. Recall, izole bir laboratuvarda
+[`scripts/recall_sweep.py`](scripts/recall_sweep.py) ile ölçülür
+([BENCHMARK.md](BENCHMARK.md)): dört MalwareBazaar günlük arşivi (75 aileden
+445 EXE/DLL) üzerindeki ilk koşu, ayrılmış kısmının %55,3'ünü (83/150)
+işaretledi. Ayarlama kısmından yapılan skor değişiklikleri, aynı örnekler
+üzerindeki ikinci koşuda bu oranı %71,3'e (107/150) çıkardı; ilk koşunun
+işaretlediği hiçbir örnek kaçmadı.
 
 ---
 
