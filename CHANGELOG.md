@@ -4,7 +4,28 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] — 2026-10-04
+
+Detection, measured. The recall benchmark ran twice in an isolated lab
+over the same 445 MalwareBazaar samples: before the scoring changes below
+and after them. The changes were chosen on the tuning parts (295 malware
+samples, 2,845 benign files); the malware held-out part was scored with
+them only in the second run. The benign held-out sample was also checked
+at two intermediate builds during development, so it is the weaker
+hold-out of the two. .NET assemblies are now read from their metadata,
+and Windows catalog signatures count.
+
+| Held-out samples | before the scoring changes | this release |
+|---|---:|---:|
+| Malware (150, isolated lab): `SUSPICIOUS` or worse | 55.3% (83) | 71.3% (107) |
+| Malware: `HIGH_RISK` | 17.3% (26) | 14.7% (22) |
+| Benign files (one Windows 11 machine): `SUSPICIOUS` or worse | 2.17% (58) | 1.72% (46) |
+
+Both columns include the .NET stage. The 95% interval for the malware gain,
+with families resampled, is +8 to +26 points; see
+[benchmarks/malwarebazaar-r1](benchmarks/malwarebazaar-r1/README.md). The
+numbers were measured at engine code `1dcb545569ce`; this release
+(`bfeb6fcbe56b`) differs from it only in its version string.
 
 ### Changed — scoring, from the first recall measurement
 The first recall run, in an isolated lab over four MalwareBazaar daily
@@ -15,7 +36,11 @@ held-out benign files. Four lenses proposed changes on the tuning parts
 only (295 malware samples, 2,845 benign files); each was recomputed and
 attacked by an independent reviewer, and the implementation was reviewed
 again. These were kept. "Nobody vouches for" below means a GUI or console
-program (not a DLL, driver or boot image) with no valid signature:
+program (not a DLL, driver or boot image) with no valid signature. No
+signature is valid off Windows, with `--no-verify-sig` or through
+`triage_bytes()`, so there the rules below treat signed files, Windows'
+own included, like unsigned ones, and a file can score higher there than
+on Windows.
 - **A program nobody vouches for whose image is mostly ciphertext**
   (entropy 7.0 or more over the file without its overlay) is not cleared:
   it is raised to `SUSPICIOUS`, the engine's existing rule for named
@@ -43,11 +68,14 @@ program (not a DLL, driver or boot image) with no valid signature:
   its table looked like a "high-entropy overlay" (149 of 152 benign
   carriers). A table that runs past the end of the file no longer hides an
   appended one, and an executable hidden inside the table is still
-  reported. Reports show the overlay bytes outside the signature.
+  reported. Reports show the overlay bytes outside the signature, and the
+  overlay's entropy and type now describe only those bytes. Fewer than
+  1 KB of them is slack, in unsigned files too: no type, no overlay note,
+  and an empty overlay column in the batch summary.
 - Floors show the points they add as an entry of their own.
 
 Benign files, measured at this code: tuning sample 2.21% -> 1.86% (one file
-newly flagged, eleven cleared; 847 of the 2,845 files now verified through a
+newly flagged, eleven cleared; 841 of the 2,845 files now verified through a
 catalog), held-out sample 2.17% -> 1.72% over the files still on disk at
 the same paths (58 of 2,675 -> 46 of 2,674 distinct files; `HIGH_RISK`
 6 -> 3; 12 of those paths hold a file updated between the two sweeps, and
@@ -75,7 +103,6 @@ and the benign samples, capped at 12 MB, hold none), a floor for unsigned
 programs with a stale checksum alone, a lower threshold (28 or 25: more
 benign files per malware sample gained), and a floor for appended
 ciphertext (unsigned PyInstaller-style bundles look the same).
-
 
 ### Added
 - The sweeps record each file's structure (`features`: subsystem, import
@@ -118,6 +145,11 @@ ciphertext (unsigned PyInstaller-style bundles look the same).
     stream, is an anomaly: it costs an author nothing and would blind the
     stage. Each such case is refused before `dnfile` builds a row for it.
   - Reports show member references and P/Invoke declared and called.
+  - The new tags map to ATT&CK (T1071.003 and T1048.003 for SMTP
+    exfiltration, T1555 for credential access, T1620 for shellcode
+    runners), and .NET-derived common tags count toward the
+    large-program cap like import-derived ones. `dnfile` 0.18 or later
+    is required.
   - Measured on the same benign samples: native files are unchanged. On
     the held-out sample, .NET assemblies flagged went from 0.25% to 0.51%
     (overall 2.15% to 2.23%; `HIGH_RISK` from 4 to 6 files), and on the
@@ -144,6 +176,11 @@ ciphertext (unsigned PyInstaller-style bundles look the same).
 - **BENCHMARK.md**: how to run and read both sweeps, the lab procedure, and
   how to build and report on a corpus.
 - Sweep rows record `signed`, `is_dll` and whether YARA ran.
+- JSON output: `image_entropy` on the report; `subsystem` and `managed`
+  on `file`; `pinvoke`, `pinvoke_count`, `pinvoke_called`, `member_refs`
+  and `metadata_error` on `dotnet`; `payload_size` on `overlay`. A
+  capability's `source` can be `managed`, and a file verified through a
+  catalog has signature status `valid` with a note naming the catalog.
 
 ### Fixed
 - **The benchmark scripts on Linux**, where the recall lab runs. CI now
@@ -166,9 +203,8 @@ ciphertext (unsigned PyInstaller-style bundles look the same).
     at most 60 workers run (the handle limit of a wait), and the sweeps
     print the number that runs. Measured on 300 benign files, verdicts and
     scores are identical to the old pool's.
-  - This replaces the per-process token and grace period added after
-    0.6.0 for items that finish quickly and were often recorded as "worker
-    died" (138 of 180 fast-failing items in a check): the parent now knows
+  - In 0.6.0, items that finished quickly were often recorded as "worker
+    died" (138 of 180 fast-failing items in a check); the parent now knows
     which item each worker holds. The 0.6.0 numbers are unaffected: those
     runs had no timeouts or crashes. A path listed twice is triaged once,
     and results are flushed every 50 rows.
@@ -196,6 +232,9 @@ ciphertext (unsigned PyInstaller-style bundles look the same).
   - `benign_sweep.py --jobs 0` is refused instead of spinning.
   - MISP export takes the file name from a Windows path on Linux too.
 
+### Tests
+- 256 → 345 tests, also run on Ubuntu in CI. The benchmarks are scripts,
+  not part of `pytest`.
 
 ## [0.6.0] — 2026-09-26
 
@@ -433,6 +472,7 @@ distribution. Consolidates all prior feature work into one shippable tool.
   weighted verdict (`LIKELY_CLEAN` / `SUSPICIOUS` / `HIGH_RISK`) where every
   point carries a printed reason.
 
+[0.7.0]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.7.0
 [0.6.0]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.6.0
 [0.5.2]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.2
 [0.5.1]: https://github.com/IlkerUnver00/gokdogan-triage/releases/tag/v0.5.1
