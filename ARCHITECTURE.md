@@ -247,7 +247,8 @@ Recall is measured by [`scripts/recall_sweep.py`](scripts/recall_sweep.py) in
 an isolated lab ([BENCHMARK.md](BENCHMARK.md)): the first run, over four
 MalwareBazaar daily batches (445 EXE/DLL samples of 75 families), flagged
 55.3% of its held-out part (83/150). The scoring changes made from its
-tuning part are being confirmed in a second run.
+tuning part raised that to 71.3% (107/150) in a second run over the same
+samples, and nothing the first run flagged was lost.
 
 ---
 

@@ -7,7 +7,7 @@ recall). gokdogan ships a script for each half. Neither runs a sample.
 | Half | Script | Where it runs | Measured so far |
 |---|---|---|---|
 | False positives | [`scripts/benign_sweep.py`](scripts/benign_sweep.py) | any machine, over installed software | 2.2% of 2,694 held-out benign files flagged (0.6.0, one Windows 11 machine); 1.7% of the 2,674 still on disk with the [Unreleased](CHANGELOG.md) scoring |
-| Detection | [`scripts/recall_sweep.py`](scripts/recall_sweep.py) | an isolated analysis VM only | 55.3% of 150 held-out malware samples flagged (first run: four MalwareBazaar daily batches, 445 EXE/DLL samples of 75 families, engine before the [Unreleased](CHANGELOG.md) scoring changes) |
+| Detection | [`scripts/recall_sweep.py`](scripts/recall_sweep.py) | an isolated analysis VM only | 71.3% of 150 held-out malware samples flagged with the [Unreleased](CHANGELOG.md) scoring, 55.3% before it (four MalwareBazaar daily batches, 445 EXE/DLL samples of 75 families; [runs](benchmarks/malwarebazaar-r1/README.md)) |
 
 ## False positives
 

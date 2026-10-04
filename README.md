@@ -376,7 +376,9 @@ gokdogan/
   - [x] detection guard: synthetic malware-shaped reports keep their verdicts
   - [x] detection benchmark harness (`scripts/recall_sweep.py`, [BENCHMARK.md](BENCHMARK.md))
   - [x] recall on a labelled malware corpus (isolated lab): 55.3% of the held-out part
-  - [ ] confirm the scoring changes made from that run's tuning part in a second run
+  - [x] confirm the scoring changes made from that run's tuning part in a second run:
+        71.3% of the same held-out part, nothing the first run flagged lost
+  - [ ] recall on a corpus first seen after the rules were frozen
   - [ ] a second machine and software mix for the false-positive rate
 
 ## What gokdogan does not do
@@ -432,13 +434,15 @@ analysts already rely on, and its edges are worth stating plainly:
   3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
   The machine is not a typical workload: most third-party files come from
   two forensic suites, installers are almost absent, and files over 12 MB
-  were not scanned. Recall was measured once, in an isolated lab, on four
+  were not scanned. Recall was measured in an isolated lab on four
   MalwareBazaar daily batches (445 EXE/DLL samples of 75 families): 55.3% of
-  the held-out part (83/150) at `SUSPICIOUS` or worse, before the scoring
-  changes in [Unreleased](CHANGELOG.md), which were made from the tuning part
-  and await a second run. Family labels are noisy, the corpus spans four
-  days, and the lab cannot verify signatures. Treat the verdict as a
-  prioritisation signal.
+  the held-out part (83/150) at `SUSPICIOUS` or worse before the scoring
+  changes in [Unreleased](CHANGELOG.md), made from the tuning part only, and
+  71.3% (107/150) after them. Most of the newly flagged samples score
+  exactly 30, so the gain sits at the `SUSPICIOUS` line. Family labels are
+  noisy, the corpus spans four days and most of its families appear on both
+  sides of the split, and the lab cannot verify signatures (had every one
+  been valid: 64.0%). Treat the verdict as a prioritisation signal.
 - **Padding the import table buys the size cap.** Common capability tags
   are capped in programs that import 200 or more distinct functions, because
   that is where benign software stacks them. A sample that links 200 real

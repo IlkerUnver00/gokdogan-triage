@@ -48,11 +48,27 @@ program (not a DLL, driver or boot image) with no valid signature:
 
 Benign files, measured at this code: tuning sample 2.21% -> 1.86% (one file
 newly flagged, eleven cleared; 847 of the 2,845 files now verified through a
-catalog), held-out sample 2.17% -> 1.72% on the same 2,674 files still on
-disk (58 -> 46; `HIGH_RISK` 6 -> 3), and Windows' 32-bit programs
-(`SysWOW64`, 2,998 files) 3.3% -> 2.3% with none newly flagged.
-Malware, recomputed from run 1's tuning breakdowns: 51.9% -> 70.8%
-(209/295); it will be measured in a second lab run at this code. Rejected or deferred: raising the zero-timestamp and
+catalog), held-out sample 2.17% -> 1.72% over the files still on disk at
+the same paths (58 of 2,675 -> 46 of 2,674 distinct files; `HIGH_RISK`
+6 -> 3; 12 of those paths hold a file updated between the two sweeps, and
+on the 2,663 files both sweeps scored it is 56 -> 44), and Windows' 32-bit
+programs (`SysWOW64`, 2,998 files, swept one build earlier, which scores
+every file of both benign samples the same) 3.3% -> 2.3% with none newly
+flagged.
+
+Malware, measured in a second lab run at this code over the same 445
+samples and the same hash split: held-out 55.3% -> **71.3%** (83 -> 107 of
+150; 95% interval 63.6–78.0%). Nothing run 1 flagged was missed (24 gained,
+0 lost), each of the four daily batches improved, and no family went down.
+Samples of one family can be near-identical builds (7 of the 24 gains are
+BlackMatter, 6 of them probably one build), so the interval for the gain
+resamples families: +8 to +26 points. 21 of the 24 gains score exactly 30
+(17 of them lifted by the new floor), and `HIGH_RISK` fell from 26 to 22
+(keylogging now scores 8, not 18). Had every signature been valid (the lab
+cannot verify them): 64.0%. Tuning part 51.9% -> 71.2% (210/295; the
+recompute had predicted 209).
+
+Rejected or deferred: raising the zero-timestamp and
 embedded-config weights (they are the Go toolchain's fingerprint: 31
 benign Go programs on the test machine score like the missed Go loaders,
 and the benign samples, capped at 12 MB, hold none), a floor for unsigned

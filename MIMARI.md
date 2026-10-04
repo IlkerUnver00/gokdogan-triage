@@ -252,8 +252,9 @@ yarısını ölçer. Recall, izole bir laboratuvarda
 [`scripts/recall_sweep.py`](scripts/recall_sweep.py) ile ölçülür
 ([BENCHMARK.md](BENCHMARK.md)): dört MalwareBazaar günlük arşivi (75 aileden
 445 EXE/DLL) üzerindeki ilk koşu, ayrılmış kısmının %55,3'ünü (83/150)
-işaretledi. Ayarlama kısmından yapılan skor değişiklikleri ikinci bir koşuyla
-doğrulanıyor.
+işaretledi. Ayarlama kısmından yapılan skor değişiklikleri, aynı örnekler
+üzerindeki ikinci koşuda bu oranı %71,3'e (107/150) çıkardı; ilk koşunun
+işaretlediği hiçbir örnek kaçmadı.
 
 ---
 
