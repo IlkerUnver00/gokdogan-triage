@@ -63,6 +63,7 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Fuzzy hashing** | **ssdeep** + optional **TLSH** | similarity-preserving: two builds of the same malware score as related even when every crypto hash differs; `--compare` scores a sample against a reference |
 | **Clustering** | `--cluster` groups a dropzone by shared hashes / fuzzy similarity; `--baseline` diffs a sample against a known-good reference | work a folder family-by-family, or answer "is this the real X or a trojanized X?" |
 | **Managed (.NET)** | CLR header, obfuscator fingerprints, and the metadata (via `dnfile`): the framework members the code references, P/Invoke declarations, and which of them each class's IL calls | a .NET stealer imports only `mscoree`; its metadata shows `SmtpClient.Send`, `Graphics.CopyFromScreen`, `ProtectedData.Unprotect` or `Assembly.Load(byte[])`, and P/Invoke calls feed the native rules (injection, keylogging, anti-debug) |
+| **Go programs** | the build info (Go version, main module, dependency modules, build settings) and the function table every Go program keeps (`pclntab`): packages linked in, Windows API wrappers, source paths. A table counts only when the file's own data points at it, not when it is carried as a payload | a Go binary imports what every Go binary imports; its packages and module path say what it is (a screenshot library, a module named after the tool). Reported, not scored yet |
 | **Rich header** | toolchain **rich_hash** + decoded `@comp.id` entries + checksum validation | fingerprints the exact build environment (more specific than imphash); a bad checksum means a forged/copied header — an anti-clustering tell |
 | **Resource walker** | enumerates `.rsrc`, hashes each leaf, flags **embedded PEs** and **high-entropy blobs** | the dropper/packer's favourite hiding spot; compressed media (PNG, JPEG, GIF, audio, fonts) is recognised by its header and exempt, while archives (ZIP, CAB, 7z, …) stay flagged, since a compressed second stage is what a dropper carries |
 | **Export table** | DLL name, named/ordinal counts, forwarders, launch-mechanism exports (`ReflectiveLoader`, `DllRegisterServer`, `ServiceMain`) | tells you how a DLL expects to be run — reflective beacon, `regsvr32` target, or service host |
@@ -401,6 +402,12 @@ analysts already rely on, and its edges are worth stating plainly:
 - **Not FLOSS.** Encoded-string recovery covers single-byte XOR/ADD/ROL,
   Base64/hex and simple stack strings. It does not emulate decoding routines
   the way FLOSS does.
+- **Go is described, not scored.** The Go stage reads a Go program's build
+  info and function table, but no rule uses them yet, so Go programs score
+  on the same imports, strings and structure as everything else, and that
+  is where many Go loaders go unseen. UPX-packed, TinyGo and gccgo builds
+  are not recognised as Go; a garbled build is recognised by the shape of
+  its function table once the file otherwise looks like Go.
 - **Not Detect It Easy or PEStudio.** Packer and compiler identification is
   shallower than DIE's signature database, and PEStudio shows more indicators
   interactively.
@@ -472,7 +479,7 @@ analysts already rely on, and its edges are worth stating plainly:
 pytest -v
 ```
 
-345 tests: unit tests cover each analyzer in isolation with synthetic
+495 tests: unit tests cover each analyzer in isolation with synthetic
 inputs. The integration suite runs the full pipeline against real system
 binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and, where installed, a
 signed `chrome.exe`) and asserts none scores `HIGH_RISK` or trips the

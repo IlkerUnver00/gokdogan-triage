@@ -40,14 +40,17 @@ class _UnionFind:
 
 
 def _imports_informative(report) -> bool:
-    """A shared import table only means something when it is native and unpacked.
+    """A shared import table only means something when it is native, unpacked
+    and not Go.
 
-    Every .NET assembly imports just mscoree!_CorExeMain, and packer stubs
-    import the same handful of loader APIs, so both their imphash and their
-    impfuzzy collide across unrelated files.
+    Every .NET assembly imports just mscoree!_CorExeMain, every Go program the
+    same kernel32 functions its runtime needs, and packer stubs the same
+    handful of loader APIs, so their imphash and impfuzzy collide across
+    unrelated files.
     """
     packer = getattr(report, "packer", None)
-    return getattr(report, "dotnet", None) is None and not getattr(packer, "detected", False)
+    return (getattr(report, "dotnet", None) is None and getattr(report, "go", None) is None
+            and not getattr(packer, "detected", False))
 
 
 def _related(r1, r2) -> str | None:

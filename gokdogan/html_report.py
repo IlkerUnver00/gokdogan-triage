@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from html import escape
 
+from .golang import package_kind
 from .models import TriageReport, Verdict
+from .report import go_summary
 
 _VERDICT_CLASS = {
     Verdict.LIKELY_CLEAN: "clean",
@@ -64,6 +66,7 @@ border-radius:20px;padding:1px 9px;font-size:12px;margin:2px 3px 2px 0;white-spa
 .bar{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle}
 .tactic{font-weight:600;margin:10px 0 4px}
 .flagline{color:var(--high)}
+details{margin:6px 0}summary{cursor:pointer;color:var(--accent)}
 .foot{color:var(--muted);font-size:12px;margin-top:28px;text-align:center}
 """
 
@@ -140,10 +143,14 @@ def render_html(report: TriageReport) -> str:
                 f" · {dn.member_refs} member references, {dn.pinvoke_count} P/Invoke"
                 + (f" ({dn.pinvoke_called} called)" if dn.pinvoke_called is not None else ""))
         ident.append((".NET", f"managed, CLR {_esc(dn.runtime_version)}{flags}{obf}{meta}"))
+    if report.go is not None:
+        obf = "".join(f' <span class="flagline">{_esc(o)}</span>' for o in report.go.obfuscation)
+        ident.append(("Go", _esc(go_summary(report.go)) + obf))
     parts.append("<h2>File</h2><div class='card'><dl class='grid'>")
     parts.append("".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in ident))
     parts.append("</dl></div>")
 
+    parts.append(_go(report))
     parts.append(_reputation(report))
     parts.append(_capabilities(report))
     parts.append(_attack(report))
@@ -160,6 +167,57 @@ def render_html(report: TriageReport) -> str:
                  "Verdict is a prioritization signal, not a conviction.</div>")
     parts.append("</div>")
     return "".join(parts)
+
+
+def _table(headers: list[str], rows: list[list[str]]) -> str:
+    head = "".join(f"<th>{h}</th>" for h in headers)
+    body = "".join("<tr>" + "".join(f"<td class='mono'>{_esc(v)}</td>" for v in r) + "</tr>" for r in rows)
+    return f"<table><tr>{head}</tr>{body}</table>"
+
+
+def _details(title: str, count: int, body: str) -> str:
+    return f"<details><summary>{title} ({count:,})</summary>{body}</details>" if count else ""
+
+
+def _go(report: TriageReport) -> str:
+    go = report.go
+    if go is None:
+        return ""
+    mod = go.main_module
+    facts = [
+        ("main package", go.main_path or "-"),
+        ("module", f"{mod.path} {mod.version}".rstrip() if mod else "-"),
+        ("dependencies", f"{go.dep_count:,}"),
+        ("build ID", go.build_id or "-"),
+        ("GOROOT", go.goroot or "-"),
+        ("cgo", "-" if go.cgo is None else "yes" if go.cgo else "no"),
+        ("trimpath", "-" if go.trimpath is None else "yes" if go.trimpath else "no"),
+        ("pclntab", f"{go.pclntab_layout} at 0x{go.pclntab_offset:x}" if go.pclntab_offset is not None else "-"),
+    ]
+    out = ["<h2>Go</h2><div class='card'><dl class='grid'>",
+           "".join(f"<dt>{k}</dt><dd class='mono'>{_esc(v)}</dd>" for k, v in facts), "</dl>"]
+    out += [f'<div class="flagline">{_esc(o)}</div>' for o in go.obfuscation]
+    out.append(_details("Build settings", len(go.settings),
+                        _table(["key", "value"], [[k, v] for k, v in go.settings.items()])))
+    out.append(_details("Dependencies", go.dep_count,
+                        _table(["module", "version", "replaced by"],
+                               [[d.path, d.version, d.replace] for d in go.deps])
+                        + (f'<div class="muted">first {len(go.deps):,} shown</div>'
+                           if go.dep_count > len(go.deps) else "")))
+    shown = [p for p in go.packages if package_kind(p) in ("third-party", "local")]
+    chips = "".join(f'<span class="chip">{_esc(p)}</span>' for p in shown)
+    out.append(_details("Packages", go.package_count,
+                        f'{chips}<div class="muted">{go.std_package_count:,} from the standard library</div>'))
+    out.append(_details("Windows API wrappers linked", len(go.winapi),
+                        "".join(f'<span class="chip">{_esc(a)}</span>' for a in go.winapi)))
+    out.append(_details("main package functions", len(go.main_functions),
+                        f'<div class="mono">{_esc(", ".join(go.main_functions))}</div>'))
+    out.append(_details("Source paths", go.source_path_count,
+                        "".join(f'<div class="mono">{_esc(p)}</div>' for p in go.source_paths)))
+    out += [f'<div class="muted">carries: {_esc(e)}</div>' for e in go.embedded]
+    out += [f'<div class="muted">note: {_esc(n)}</div>' for n in go.notes]
+    out.append("</div>")
+    return "".join(out)
 
 
 def _reputation(report: TriageReport) -> str:

@@ -66,6 +66,57 @@ class DotNetInfo:
 
 
 @dataclass
+class GoModule:
+    path: str
+    version: str = ""   # "v1.2.3", "(devel)", a pseudo-version, "+dirty"
+    sum: str = ""       # "h1:..."
+    replace: str = ""   # target of a "=>" line: "path version" or a local directory
+
+
+@dataclass
+class GoInfo:
+    """A Go program: what its build info and function table (pclntab) say.
+
+    Descriptive only: nothing here is scored yet. `confirmed` means this
+    image's runtime.firstmoduledata points at the function table, so the
+    table is the program's own and not a payload it carries."""
+    version: str | None = None    # "go1.26.5"; None when no build info or runtime string was found
+    version_source: str = ""      # "buildinfo" or "runtime" (runtime.buildVersion)
+    evidence: list[str] = field(default_factory=list)  # "buildinfo", "pclntab", "build-id"
+    confirmed: bool = False
+    ptr_size: int = 0
+    buildinfo_format: str = ""    # "inline" (Go 1.18+) or "pointer" (Go 1.13-1.17)
+    buildinfo_offset: int | None = None
+    main_path: str = ""           # import path of the main package
+    main_module: GoModule | None = None   # None with a main path: a GOPATH or vendor build
+    deps: list[GoModule] = field(default_factory=list)   # the first 500
+    dep_count: int = 0
+    settings: dict[str, str] = field(default_factory=dict)   # "build" lines: -ldflags, CGO_ENABLED, ...
+    build_id: str | None = None
+    cgo: bool | None = None
+    trimpath: bool | None = None
+    pclntab_layout: str = ""      # "1.2-1.15", "1.16-1.17", "1.18-1.19" or "1.20+"
+    pclntab_offset: int | None = None
+    function_count: int = 0
+    name_count: int = 0           # distinct function names (inlined callees included from 1.16)
+    packages: list[str] = field(default_factory=list)   # every package with code, sorted, the first 3,000
+    package_count: int = 0
+    std_package_count: int = 0
+    third_party_count: int = 0
+    local_package_count: int = 0  # "main" not counted
+    main_functions: list[str] = field(default_factory=list)   # "main.*", the first 200
+    winapi: list[str] = field(default_factory=list)  # Windows API wrappers linked in, the first 1,000
+    proc_call: bool = False       # (*LazyProc).Call linked: calls by name are possible
+    file_count: int = 0
+    goroot: str | None = None
+    source_paths: list[str] = field(default_factory=list)   # the build machine's own source files, first 50
+    source_path_count: int = 0
+    obfuscation: list[str] = field(default_factory=list)
+    embedded: list[str] = field(default_factory=list)   # other Go programs found in the bytes
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
 class OverlayInfo:
     offset: int
     size: int
@@ -231,6 +282,7 @@ class ScoreEntry:
 class TriageReport:
     file: FileInfo
     dotnet: DotNetInfo | None = None
+    go: GoInfo | None = None
     signature: SignatureInfo | None = None
     overlay: OverlayInfo | None = None
     rich: RichHeader | None = None

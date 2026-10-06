@@ -697,6 +697,7 @@ def test_a_real_pe_goes_through_the_recall_run_with_yara_when_installed(tmp_path
     features = rows[0]["features"]
     assert features["subsystem"] == "console" and features["import_count"] > 0
     assert features["sections"] and features["image_entropy"] <= 8
+    assert rows[0]["go"] is False and features["go"] is None      # pip's launcher is C
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symbolic links need privileges on Windows")

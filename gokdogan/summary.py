@@ -20,7 +20,7 @@ from .overlay import MIN_PAYLOAD
 # Stable column order for CSV; also the key order for JSONL objects.
 FIELDS = [
     "path", "sha256", "size", "type", "verdict", "score",
-    "signature", "signer", "dotnet",
+    "signature", "signer", "dotnet", "go",
     "imphash", "impfuzzy", "authentihash", "rich_hash", "ssdeep",
     "packer", "capabilities", "attack", "yara",
     "embedded_pe", "encoded_strings", "config_blobs", "anomalies",
@@ -68,6 +68,7 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
         "signature": report.signature.status if report.signature else "",
         "signer": report.signature.signer if report.signature else "",
         "dotnet": (report.dotnet.runtime_version if report.dotnet else ""),
+        "go": ((report.go.version or "unknown") if report.go else ""),
         "imphash": report.file.imphash or "",
         "impfuzzy": report.file.impfuzzy or "",
         "authentihash": report.file.authentihash or "",
@@ -90,9 +91,13 @@ def summary_row(report: TriageReport) -> dict[str, Any]:
 
 def _flatten_for_csv(value: Any) -> Any:
     if isinstance(value, list):
-        return "; ".join(str(v) for v in value)
+        value = "; ".join(str(v) for v in value)
     if isinstance(value, bool):
         return "yes" if value else "no"
+    # Sample-derived text (a signer, a path, a Go version) must not become a
+    # formula when the CSV is opened in a spreadsheet.
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
     return value
 
 

@@ -6,7 +6,47 @@ All notable changes to **gokdogan** are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Go stage** (`gokdogan/golang.py`). A Go program imports what every Go
+  program imports, so its import table and imphash say almost nothing; the
+  build info and the function table the Go linker always writes do. Both are
+  now read and reported. Nothing is scored yet: Go rules wait for a lab run
+  that labels the recall corpus and for a benign baseline of Go programs.
+  - Build info (Go 1.13 and later, both formats): toolchain version, main
+    package and module, dependency modules with their versions and
+    replacements, build settings (`-ldflags`, `CGO_ENABLED`, `-trimpath`,
+    the VCS revision), and the build ID.
+  - The function table (`pclntab`; the Go 1.2 to 1.26 layouts, 32- and
+    64-bit), which survives `-ldflags "-s -w"`: every package linked in
+    (standard library, third-party, local), the Windows API wrappers linked,
+    the `main.*` functions and the build machine's source paths.
+  - Only the file's own program counts. A build-info header must sit
+    16-byte aligned in a data section with this PE's pointer size (Git for
+    Windows' C programs carry the magic as text), and a function table only
+    when the file's own data points at it, `confirmed` when that pointer is
+    the program's runtime (`runtime.firstmoduledata`); a Go program carried
+    as data is listed, not taken for the file. The runtime's pointers also recover a table whose header was
+    altered, and a table whose magic was replaced (garble) is found by its
+    shape once the file otherwise looks like Go.
+  - Obfuscation signs are listed: a replaced magic, an altered header,
+    removed build info, garble-style package names.
+  - Over 17,777 installed PE files on the test machine: 53 Go programs, all
+    confirmed; none of the 18 non-Go files that carry the build-info magic
+    is taken for Go; median 0.34 ms on a file that is not Go.
+  - Reported in the console, the HTML report (a Go card), JSON (`go`), batch
+    summaries (a `go` column with the toolchain version) and the sweeps'
+    `features` (`go`: version, packages, modules, Windows API wrappers,
+    obfuscation). Recall summaries split Go samples from the rest.
+  - The stage was attacked in review before it went in: forged tables,
+    counts and string headers stay within a time and memory bound, a
+    forged build setting cannot break the JSON or HTML writers, and control
+    characters in Go names are shown escaped instead of reaching the
+    terminal.
+
 ### Changed
+- `--cluster` no longer relates Go programs by imphash or impfuzzy: every
+  Go program imports what its runtime needs, so unrelated ones matched, as
+  .NET assemblies and packed files already did not.
 - The release build's smoke test fails when the frozen `gokdogan.exe`
   cannot run YARA or read .NET metadata. It used to triage one file with
   YARA turned off, so a build missing the rules or `dnfile` passed. The
@@ -20,6 +60,11 @@ All notable changes to **gokdogan** are documented here. The format follows
   checks are no longer anti-debug, and a stale checksum scores 12).
 - `triage_bytes()` says that it does not consult Windows catalogs: a
   catalog-signed system file reports as unsigned there.
+
+### Fixed
+- Batch CSV summaries prefix a cell that starts with `=`, `+`, `-` or `@`
+  with `'`, so a signer name, path or version taken from a sample cannot
+  run as a formula when the file is opened in a spreadsheet.
 
 ## [0.7.0] — 2026-10-04
 

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from typing import TextIO
 
-from .models import TriageReport, Verdict
+from .golang import package_kind
+from .models import GoInfo, TriageReport, Verdict
 
 _RESET = "\x1b[0m"
 _BOLD = "\x1b[1m"
@@ -76,6 +78,76 @@ def _signature_line(report: TriageReport, c) -> str:
     return f"present, {sig.status}{signer}"
 
 
+def _more(items: list[str], shown: int, total: int | None = None) -> str:
+    rest = (len(items) if total is None else total) - shown
+    return ", ".join(items[:shown]) + (f", +{rest} more" if rest > 0 else "")
+
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def _cut(text: str, n: int = 110) -> str:
+    """Shortened, with control characters shown as \\xNN: Go names and paths come
+    from the sample, and an escape sequence must not reach the analyst's terminal."""
+    text = _CONTROL.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+    return text if len(text) <= n else text[:n - 1] + "…"
+
+
+def go_summary(go: GoInfo) -> str:
+    """One line: version, evidence and, when the function table was read, its size."""
+    line = f"{go.version or 'version unknown'} ({' + '.join(go.evidence)}{', confirmed' if go.confirmed else ''})"
+    if go.package_count:
+        line += (f" · {go.function_count:,} functions in {go.package_count:,} packages "
+                 f"({go.std_package_count} std, {go.third_party_count} third-party, "
+                 f"{go.local_package_count} local)")
+    return line
+
+
+def go_lines(go: GoInfo) -> list[tuple[str, str | None]]:
+    """The Go block of the console report: (text, style); style None is the headline."""
+    out: list[tuple[str, str | None]] = [(_cut(go_summary(go), 220), None)]
+    main = []
+    if go.main_path:
+        main.append(f"main {go.main_path}")
+    if go.main_module is not None:
+        main.append(f"module {go.main_module.path} {go.main_module.version}".rstrip())
+    if go.dep_count:
+        main.append(f"{go.dep_count} dependencies")
+    if main:
+        out.append((_cut(" · ".join(main)), _DIM))
+    build = []
+    for key in ("CGO_ENABLED", "-trimpath", "-buildmode", "-ldflags", "vcs.revision", "vcs.modified"):
+        if key in go.settings:
+            value = go.settings[key]
+            value = value[:12] if key == "vcs.revision" else _cut(value, 80)
+            build.append(f"{key}={value}")
+    if build:
+        out.append((_cut("build: " + " ".join(build)), _DIM))
+    third = [p for p in go.packages if package_kind(p) == "third-party"]
+    if third:
+        out.append((_cut("third-party: " + _more(third, 6, go.third_party_count)), _DIM))
+    if go.winapi:
+        out.append((_cut(f"Windows API linked: {len(go.winapi)} ({_more(go.winapi, 8)})"), _DIM))
+    funcs = [f for f in go.main_functions if f != "main.main" and not f.startswith("main.init")]
+    if funcs:
+        out.append((_cut("main.*: " + _more(funcs, 6)), _DIM))
+    if go.source_paths or go.goroot:
+        parts = []
+        if go.source_paths:
+            extra = go.source_path_count - 1
+            parts.append(f"source: {go.source_paths[0]}" + (f" (+{extra} more)" if extra > 0 else ""))
+        if go.goroot:
+            parts.append(f"GOROOT {go.goroot}")
+        out.append((_cut("; ".join(parts)), _DIM))
+    if go.build_id:
+        out.append((_cut(f"build ID: {go.build_id}"), _DIM))
+    if go.obfuscation:
+        out.append((_cut("obfuscation: " + "; ".join(go.obfuscation), 160), _YELLOW))
+    out += [(_cut(f"carries: {e}"), _DIM) for e in go.embedded]
+    out += [(_cut(f"note: {n}"), _DIM) for n in go.notes]
+    return out
+
+
 def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
     color = _use_color(stream)
     stream = _SafeStream(stream)
@@ -129,6 +201,9 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
                 more = dn.pinvoke_count - 6
                 shown = ", ".join(dn.pinvoke[:6]) + (f", +{more} more" if more > 0 else "")
                 stream.write(c(_DIM, f"               P/Invoke: {shown}\n"))
+    if report.go is not None:
+        for line, style in go_lines(report.go):
+            stream.write((c(style, f"               {line}") if style else f"  Go         : {line}") + "\n")
 
     header("Sections")
     stream.write(f"  {'name':<10} {'raw size':>10} {'entropy':>8}  flags\n")

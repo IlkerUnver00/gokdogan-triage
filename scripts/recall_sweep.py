@@ -440,6 +440,9 @@ def summarize(rows: list[dict], manifest: dict[str, dict], holdout_fraction: flo
         "DLL": [s for s in tune if s.get("is_dll")],
         "not DLL": [s for s in tune if not s.get("is_dll")],
     }
+    if any(s.get("go") is not None for s in tune):     # rows from engines with the Go stage
+        strata["Go"] = [s for s in tune if s.get("go") is True]
+        strata["not Go"] = [s for s in tune if s.get("go") is False]
     families = Counter(s["family"] for s in tune)
     years = Counter(s["year"] for s in tune)
     missed = [s for s in tune if s["score"] < SUSPICIOUS]
@@ -485,7 +488,7 @@ def summarize(rows: list[dict], manifest: dict[str, dict], holdout_fraction: flo
         "tuning_detected": len(tune) - len(missed),
         "tuning_worst_misses": [
             {"sha256": s["sha256"], "family": s["family"], "score": s["score"],
-             "dotnet": s["dotnet"], "packed": s["packed"],
+             "dotnet": s["dotnet"], "go": s.get("go", False), "packed": s["packed"],
              "top": sorted(({"points": p, "reason": _clip(t)} for p, t in s["breakdown"]),
                            key=lambda e: -e["points"])[:5]}
             for s in sorted(missed, key=lambda s: (s["score"], s["sha256"]))[:30]],
@@ -600,7 +603,7 @@ def to_markdown(summary: dict) -> str:
     lines += ["", "## Tuning part: lowest-scoring misses", ""]
     for m in summary["tuning_worst_misses"]:
         top = "; ".join(f"{e['points']:+d} {e['reason'][:50]}" for e in m["top"]) or "no signal"
-        kind = ".NET" if m["dotnet"] else "native"
+        kind = ".NET" if m["dotnet"] else "Go" if m.get("go") else "native"
         lines.append(f"- **{m['score']}** {m['family']} ({kind}{', packed' if m['packed'] else ''}) "
                      f"`{m['sha256'][:16]}` — {top}")
     return "\n".join(lines) + "\n"
