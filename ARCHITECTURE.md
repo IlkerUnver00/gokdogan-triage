@@ -8,7 +8,7 @@ extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
 - **~7,200 lines** of Python across 32 focused modules
-- **~5,300 lines** of tests · **495 tests** · real-binary integration suite
+- **~5,400 lines** of tests · **519 tests** · real-binary integration suite
 - False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 1.7% of held-out benign files flagged at 0.7.0 (2.2% at 0.6.0, 12.7% at v0.5.2)
 - Detection benchmark ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): 71.3% of 150 held-out malware samples flagged in an isolated lab (55.3% before the 0.7.0 scoring)
 - Hard deps: `pefile`, `ppdeep`, `dnfile` · optional: `yara-python`, `py-tlsh`
@@ -230,7 +230,7 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**495 tests / ~5,300 lines.** Unit tests cover each analyzer in isolation with
+**519 tests / ~5,400 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
 entropy islands, synthetic certificate tables, hostile strings that once made
 classification quadratic). The integration suite runs the full pipeline

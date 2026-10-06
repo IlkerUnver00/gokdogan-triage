@@ -479,7 +479,7 @@ analysts already rely on, and its edges are worth stating plainly:
 pytest -v
 ```
 
-495 tests: unit tests cover each analyzer in isolation with synthetic
+519 tests: unit tests cover each analyzer in isolation with synthetic
 inputs. The integration suite runs the full pipeline against real system
 binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and, where installed, a
 signed `chrome.exe`) and asserts none scores `HIGH_RISK` or trips the

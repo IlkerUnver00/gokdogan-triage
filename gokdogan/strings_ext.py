@@ -54,7 +54,11 @@ _COMMAND_PATTERNS = (
     # Destroying backups and logs (also read by the anti-recovery capability).
     r"\bvssadmin" + _EXE + r"\s+(?:delete\s+shadows|resize\s+shadowstorage)",
     r"\bwmic" + _EXE + r"\s" + _GAP + r"shadowcopy\s[^\r\n]{0,40}?delete|win32_shadowcopy" + _GAP + r"delete",
-    r"\bbcdedit" + _EXE + r"\s" + _GAP + r"/(?:set|delete)\b",
+    # bcdedit only to turn recovery or integrity checks off, boot into safe
+    # mode or delete an entry: "/set hypervisorlaunchtype" and "/set nx" are
+    # what installers do.
+    r"\bbcdedit" + _EXE + r"\s" + _GAP + r"(?:[/-]set\s+(?:\{[^}\r\n]{1,40}\}\s+)?(?:recoveryenabled|"
+    r"bootstatuspolicy|safeboot|testsigning|nointegritychecks|loadoptions)\b|[/-]delete(?:value)?\b)",
     r"\bwbadmin" + _EXE + r"\s+delete\s+(?:catalog|systemstatebackup|backup)",
     r"\bwevtutil" + _EXE + r"\s+(?:cl|clear-log)\b",
 )
