@@ -63,7 +63,9 @@ def triage_bytes(
     """Triage PE bytes that are not on disk (an upload, a carved file, a test).
 
     Authenticode verification needs a file, so a signature is reported as
-    present but unverified.
+    present but unverified. Windows catalogs are not consulted either: a
+    file Windows signs through a catalog (most of System32) reports as
+    unsigned here, though `triage()` on the same file finds it valid.
     """
     return _triage(parse_pe(data, name), data, name, rules_dir, min_string_length, use_yara,
                    verify_signature=False)
