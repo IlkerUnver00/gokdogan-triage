@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/gokdogan-triage?label=pypi)](https://pypi.org/project/gokdogan-triage/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![ruff](https://img.shields.io/badge/lint-ruff-orange)](https://docs.astral.sh/ruff/)
-[![license](https://img.shields.io/badge/license-MIT-green)](#license)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/LICENSE)
 
 **Static PE malware triage engine.** Feed it a Windows executable; it extracts
 static features — hashes, imphash, per-section entropy, packer artifacts,
@@ -21,17 +21,17 @@ deserve a full analyst's attention. (The package and command are the ASCII
 > verdict is a prioritization signal, not a definitive classification. Handle
 > real malware only inside an isolated analysis VM.
 
-> 📐 **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) (English) ·
-> [MIMARI.md](MIMARI.md) (Türkçe) ·
+> 📐 **Architecture:** [ARCHITECTURE.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/ARCHITECTURE.md) (English) ·
+> [MIMARI.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/MIMARI.md) (Türkçe) ·
 > **[live visual page ↗](https://ilkerunver00.github.io/gokdogan-triage/)**
-> ([source](docs/index.html)) · [changelog](CHANGELOG.md)
+> ([source](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/docs/index.html)) · [changelog](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/CHANGELOG.md)
 
 <p align="center">
-  <img src="assets/gokdogan-demo.gif" width="820"
-       alt="gokdogan triaging a demo sample in the terminal — the report streams in and ends on a HIGH RISK verdict, score 140">
+  <img src="https://raw.githubusercontent.com/IlkerUnver00/gokdogan-triage/main/assets/gokdogan-demo.gif" width="820"
+       alt="gokdogan triaging a demo sample in the terminal — the report streams in and ends on a HIGH RISK verdict, score 120">
   <br>
   <em>Static triage of a network-free
-  <a href="examples/make_demo_sample.py">demo sample</a>: hashes, capabilities,
+  <a href="https://github.com/IlkerUnver00/gokdogan-triage/blob/main/examples/make_demo_sample.py">demo sample</a>: hashes, capabilities,
   MITRE ATT&amp;CK, recovered C2, and a transparent weighted verdict — the
   sample is never executed.</em>
 </p>
@@ -82,13 +82,13 @@ deserve a full analyst's attention. (The package and command are the ASCII
 | **Reputation** (opt-in) | VirusTotal + MalwareBazaar **hash-only** lookup, off by default | "is this already known?" without uploading the sample — only the SHA-256 leaves, and only when you pass `--reputation` with a key |
 
 <p align="center">
-  <img src="assets/pipeline.png" width="860"
+  <img src="https://raw.githubusercontent.com/IlkerUnver00/gokdogan-triage/main/assets/pipeline.png" width="860"
        alt="gokdogan static pipeline: a sample flows through the triage stages to a transparent weighted verdict and multiple output formats">
 </p>
 
-*The full pipeline — plus the [analysis surface](assets/analysis-layers.png) and
-[verdict model](assets/verdict-model.png) diagrams — is walked through in
-[ARCHITECTURE.md](ARCHITECTURE.md) (English) · [MIMARI.md](MIMARI.md) (Türkçe).*
+*The full pipeline — plus the [analysis surface](https://raw.githubusercontent.com/IlkerUnver00/gokdogan-triage/main/assets/analysis-layers.png) and
+[verdict model](https://raw.githubusercontent.com/IlkerUnver00/gokdogan-triage/main/assets/verdict-model.png) diagrams — is walked through in
+[ARCHITECTURE.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/ARCHITECTURE.md) (English) · [MIMARI.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/MIMARI.md) (Türkçe).*
 
 ## Install
 
@@ -262,10 +262,10 @@ gokdogan triage report — invoice_scan.exe
   HIGH RISK  (score 64, thresholds: suspicious ≥ 30, high risk ≥ 60)
 ```
 
-The same triage rendered as a self-contained HTML case file (`--html`):
+The demo sample's triage rendered as a self-contained HTML case file (`--html`):
 
 <p align="center">
-  <img src="assets/demo-report.png" width="760"
+  <img src="https://raw.githubusercontent.com/IlkerUnver00/gokdogan-triage/main/assets/demo-report.png" width="760"
        alt="gokdogan's self-contained HTML report — HIGH RISK verdict with the full per-point scoring rationale, file identity, and capability tags mapped to MITRE ATT&CK">
 </p>
 
@@ -323,7 +323,7 @@ gokdogan/
   program importing 200 or more functions, the common behaviour tags (network,
   crypto, registry, …) are capped together, because a program that large has
   them all. Each rule was priced on benign software with
-  [`scripts/benign_sweep.py`](scripts/benign_sweep.py) before it went in.
+  [`scripts/benign_sweep.py`](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/scripts/benign_sweep.py) before it went in.
 - **Graceful degradation**: no yara-python, no rules dir, unparseable imports —
   each degrades to a note in the report instead of a crash.
 - **Offline by default.** The `triage()` engine never touches the network;
@@ -374,7 +374,7 @@ gokdogan/
   - [x] calibration against it: specific-API rules, one fact counted once,
         size-aware capability cap, reproducible-build timestamps
   - [x] detection guard: synthetic malware-shaped reports keep their verdicts
-  - [x] detection benchmark harness (`scripts/recall_sweep.py`, [BENCHMARK.md](BENCHMARK.md))
+  - [x] detection benchmark harness (`scripts/recall_sweep.py`, [BENCHMARK.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/BENCHMARK.md))
   - [x] recall on a labelled malware corpus (isolated lab): 55.3% of the held-out part
   - [x] confirm the scoring changes made from that run's tuning part in a second run:
         71.3% of the same held-out part, nothing the first run flagged lost
@@ -417,7 +417,7 @@ analysts already rely on, and its edges are worth stating plainly:
   `System.Core.dll`, held there by the rule that a valid signature never
   clears a severity-3 tag; the PowerShell engine scores `HIGH_RISK`.
 - **False positives are measured on one machine, recall on one corpus.**
-  [`scripts/benign_sweep.py`](scripts/benign_sweep.py) triages installed PE
+  [`scripts/benign_sweep.py`](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/scripts/benign_sweep.py) triages installed PE
   files and counts every verdict above `LIKELY_CLEAN` as a false positive
   (installed software is assumed benign; nothing was checked against a
   reputation service). On one Windows 11 workstation it drew a random sample
@@ -430,7 +430,7 @@ analysts already rely on, and its edges are worth stating plainly:
   machine that played no part in tuning: v0.5.2 12.7% / 2.2%, 0.6.0
   2.2% / 0.15% (59 and 4 files; 95% interval for the first 1.7–2.8%); with
   the .NET stage added since, 2.2% / 0.22% (60 and 6 files), and with the
-  scoring changes in [0.7.0](CHANGELOG.md) 1.7% / 0.11% (46 and 3 of
+  scoring changes in [0.7.0](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/CHANGELOG.md) 1.7% / 0.11% (46 and 3 of
   2,674 files still on disk). On
   native PE files, which the import-based rules actually analyse, it is
   3.0% (v0.5.2: 17.7%); 29% of the files are .NET assemblies.
@@ -439,7 +439,7 @@ analysts already rely on, and its edges are worth stating plainly:
   were not scanned. Recall was measured in an isolated lab on four
   MalwareBazaar daily batches (445 EXE/DLL samples of 75 families): 55.3% of
   the held-out part (83/150) at `SUSPICIOUS` or worse before the scoring
-  changes in [0.7.0](CHANGELOG.md), made from the tuning part only, and
+  changes in [0.7.0](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/CHANGELOG.md), made from the tuning part only, and
   71.3% (107/150) after them. Most of the newly flagged samples score
   exactly 30, so the gain sits at the `SUSPICIOUS` line. Family labels are
   noisy, the corpus spans four days and most of its families appear on both
@@ -478,7 +478,7 @@ binaries (`notepad.exe`, `kernel32.dll`, `mmc.exe` and, where installed, a
 signed `chrome.exe`) and asserts none scores `HIGH_RISK` or trips the
 dropper / embedded-config / phantom-string false positives; at v0.5.2
 `mmc.exe` and `chrome.exe` did score `HIGH_RISK` (83 and 79). The detection
-guard ([`tests/archetypes.py`](tests/archetypes.py)) scores twelve
+guard ([`tests/archetypes.py`](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/tests/archetypes.py)) scores twelve
 synthetic malware-shaped reports and fails if calibration lowers any of them
 below the verdict v0.5.2 gave it (one documented exception).
 
@@ -494,7 +494,7 @@ machine). `--paths-from` re-scores the same files with another engine
 (`--engine`), and `--exclude-results` draws a held-out sample. Its
 counterpart for detection, `scripts/recall_sweep.py`, triages a labelled
 malware corpus inside an isolated lab VM without extracting or running a
-sample; [BENCHMARK.md](BENCHMARK.md) describes both, the lab rules and how
+sample; [BENCHMARK.md](https://github.com/IlkerUnver00/gokdogan-triage/blob/main/BENCHMARK.md) describes both, the lab rules and how
 to read and report the numbers.
 
 ## License

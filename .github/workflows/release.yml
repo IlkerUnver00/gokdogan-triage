@@ -4,6 +4,10 @@ name: release
 #
 #   git tag v0.5.0 && git push origin v0.5.0
 #
+# Run it by hand on a branch (Actions → release → Run workflow, or
+# `gh workflow run release.yml --ref <branch>`) to build and smoke-test the
+# binaries before tagging; only a tag creates the GitHub Release.
+#
 # Produces and attaches to the GitHub Release:
 #   gokdogan.exe        standalone single-file CLI (no Python needed)
 #   gokdogan-setup.exe  installer (per-user, optional PATH entry, uninstaller)
@@ -11,6 +15,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   windows-binaries:
@@ -38,8 +43,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "--version failed" }
           # Triage exit codes 0/2/3 are verdicts (clean/suspicious/high-risk),
           # not errors; only 1 (usage/parse error) or a crash should fail here.
-          .\dist\gokdogan.exe C:\Windows\System32\notepad.exe --quiet --no-yara
+          .\dist\gokdogan.exe C:\Windows\System32\notepad.exe --quiet --json smoke-native.json
           if ($LASTEXITCODE -notin 0, 2, 3) { throw "frozen triage failed with exit $LASTEXITCODE" }
+          # The frozen exe must carry what pip installs bring: the bundled YARA
+          # rules and yara-python, and dnfile for .NET metadata.
+          $native = Get-Content smoke-native.json -Raw | ConvertFrom-Json
+          if ($null -ne $native.yara_error) { throw "YARA did not run in the frozen exe: $($native.yara_error)" }
+          .\dist\gokdogan.exe C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe --quiet --json smoke-dotnet.json
+          if ($LASTEXITCODE -notin 0, 2, 3) { throw "frozen .NET triage failed with exit $LASTEXITCODE" }
+          $dotnet = Get-Content smoke-dotnet.json -Raw | ConvertFrom-Json
+          if ($null -eq $dotnet.dotnet) { throw "the frozen exe did not read .NET metadata" }
+          if ($null -ne $dotnet.dotnet.metadata_error) { throw "the frozen exe could not read .NET metadata: $($dotnet.dotnet.metadata_error)" }
+          if ($dotnet.dotnet.member_refs -lt 1) { throw "the frozen exe read no .NET member references" }
           exit 0
 
       - name: Install Inno Setup
@@ -50,6 +65,7 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\gokdogan.iss
 
       - name: Create GitHub Release with binaries
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

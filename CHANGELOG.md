@@ -4,6 +4,23 @@ All notable changes to **gokdogan** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- The release build's smoke test fails when the frozen `gokdogan.exe`
+  cannot run YARA or read .NET metadata. It used to triage one file with
+  YARA turned off, so a build missing the rules or `dnfile` passed. The
+  release workflow can also be run by hand on a branch to build and test
+  the binaries before tagging; only a tag creates the GitHub Release.
+- README links and images use absolute URLs, so they also work on the
+  PyPI project page. The terminal GIF and the HTML-report image show a
+  current triage of the demo sample: `HIGH_RISK` at 120, where both
+  showed 140 from 0.5.1
+  (since then shared evidence counts once, the MSVC runtime's debugger
+  checks are no longer anti-debug, and a stale checksum scores 12).
+- `triage_bytes()` says that it does not consult Windows catalogs: a
+  catalog-signed system file reports as unsigned there.
+
 ## [0.7.0] — 2026-10-04
 
 Detection, measured. The recall benchmark ran twice in an isolated lab
