@@ -365,7 +365,8 @@ _RUN_KEY_MARKERS = ("currentversion\\run", "currentversion\\runonce", "userinit"
 _X = r"(?:\.exe)?\"?"
 _ANTI_RECOVERY = re.compile(
     r"vssadmin" + _X + r"\s+(?:delete|resize)|shadowcopy[^\r\n]{0,160}?delete|"
-    r"bcdedit" + _X + r"\s[^\r\n]{0,80}?/(?:set|delete)\b|wbadmin" + _X + r"\s+delete|"
+    r"bcdedit" + _X + r"\s[^\r\n]{0,80}?(?:[/-]set\s+(?:\{[^}\r\n]{1,40}\}\s+)?(?:recoveryenabled|"
+    r"bootstatuspolicy)\b|[/-]delete\b)|wbadmin" + _X + r"\s+delete|"
     r"wevtutil" + _X + r"\s+(?:cl|clear-log)\b",
     re.I,
 )

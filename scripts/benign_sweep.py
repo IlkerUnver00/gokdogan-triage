@@ -324,6 +324,9 @@ def report_fields(report, use_yara: bool) -> dict:
         # Structure, so a later analysis can weigh features the score does not
         # use yet without another lab run.
         features=_features(report),
+        # Which strings of each rule matched, so a rule can be tightened from
+        # the rows alone (identifiers only: matched text may be a sample's).
+        yara_strings={h.rule: list(h.strings) for h in report.yara},
     )
 
 

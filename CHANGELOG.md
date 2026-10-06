@@ -7,6 +7,9 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Sweep rows record which strings of each YARA rule matched
+  (`yara_strings`, identifiers only), so a rule can be tightened from the
+  rows of a lab run.
 - **Go stage** (`gokdogan/golang.py`). A Go program imports what every Go
   program imports, so its import table and imphash say almost nothing; the
   build info and the function table the Go linker always writes do. Both are
@@ -44,6 +47,40 @@ All notable changes to **gokdogan** are documented here. The format follows
     terminal.
 
 ### Changed
+- **Two YARA rules and the `bcdedit` patterns no longer fire on benign
+  text in large programs.** A sweep of 38 Go programs on the test machine
+  (53 paths, up to 100 MB; three larger Go programs were not scored), free
+  of the benign sweeps' 12 MB cap, found the current scoring flagging 7 of
+  them, 3 `HIGH_RISK`, largely on text every large program carries:
+  - `Ransom_Note_Language` needs a phrase about the victim's files ("files
+    have been encrypted", "decrypt your files", ...) next to a payment hint
+    or a second phrase. "bitcoin" and "decryption key" alone are in every
+    browser and Node.js, and Go's TLS library says "unsupported decryption
+    key type". It fired on 31 benign paths (24 files) across both samples,
+    the Go programs and the 405 installed files over 12 MB; now on none.
+  - `Shadow_Copy_Deletion`, the `anti-recovery` capability and the
+    suspicious-command list read `bcdedit` only when it turns recovery off
+    (`recoveryenabled`, `bootstatuspolicy`) or deletes an entry, and the
+    YARA rule and the command list also when it reboots into safe mode or,
+    for the command list, turns integrity checks off (`safeboot`,
+    `testsigning`, `nointegritychecks`, `loadoptions`). `/set` and `-set`
+    are both read. Docker's "bcdedit /set hypervisorlaunchtype auto" is an
+    installer's command: shown as a tool name, not scored.
+  - `PowerShell_EncodedCommand` is unchanged. Its `-enc` also matches
+    "grpc-encoding", but Go and Rust pack string literals with nothing
+    between them, so requiring a separator would miss real encoded commands
+    in the very programs the recall lab misses most. Sweep rows now record
+    which strings matched, and the next lab run decides.
+  - Measured: the 38 Go programs 18.4% -> 7.9% flagged (`HIGH_RISK` 3 ->
+    2); the benign held-out sample 1.72% -> 1.65%; the tuning sample
+    unchanged. Still flagged: two Go programs on what the Go runtime itself
+    produces and one also on an extracted remote-config string, which waits
+    for Go rules. In the recall corpus no detection depended on
+    `Ransom_Note_Language` or `Shadow_Copy_Deletion`. One held-out sample
+    (55 points) carries `anti-recovery` and four command strings; it would
+    fall below 30 only if its anti-recovery evidence and at least two of
+    those strings were non-recovery `bcdedit /set` lines. The rows do not
+    say, so the next lab run checks it.
 - `--cluster` no longer relates Go programs by imphash or impfuzzy: every
   Go program imports what its runtime needs, so unrelated ones matched, as
   .NET assemblies and packed files already did not.

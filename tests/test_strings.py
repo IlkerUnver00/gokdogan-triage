@@ -40,12 +40,26 @@ def test_lolbin_invocations_are_commands():
 
 
 def test_invocations_spelled_with_exe_or_a_path_are_commands():
-    for text in ("bcdedit.exe /set {current} nx OptIn",
-                 r"C:\Windows\System32\bcdedit.exe /set {current} bootmenupolicy Standard",
+    for text in ("bcdedit.exe /set {current} testsigning on",
+                 r"C:\Windows\System32\bcdedit.exe /set {current} safeboot minimal",
                  "vssadmin.exe Delete Shadows /For=D: /Oldest",
                  "wmic.exe shadowcopy where id=1 delete",
                  "wbadmin.exe delete catalog",
                  "wevtutil.exe cl Application"):
+        assert classify(text) == "command", text
+
+
+def test_bcdedit_that_installers_run_is_not_a_command():
+    # Docker Desktop's help text tells the user to enable Hyper-V this way.
+    for text in ("bcdedit /set hypervisorlaunchtype auto", "bcdedit -set hypervisorlaunchtype auto",
+                 "bcdedit.exe /set {current} nx OptIn", "bcdedit /set {current} bootmenupolicy Standard"):
+        assert classify(text) != "command", text
+
+
+def test_bcdedit_that_disables_recovery_or_checks_is_a_command():
+    for text in ("bcdedit /set {default} recoveryenabled No", "bcdedit.exe -set {default} recoveryenabled No",
+                 "bcdedit /set testsigning on", "bcdedit /deletevalue {default} safeboot",
+                 "bcdedit /delete {current}"):
         assert classify(text) == "command", text
 
 

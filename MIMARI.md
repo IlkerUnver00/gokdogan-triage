@@ -9,7 +9,7 @@
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
 - 32 odaklı modülde **~7.200 satır** Python
-- **~5.300 satır** test · **495 test** · gerçek binary entegrasyon paketi
+- **~5.400 satır** test · **519 test** · gerçek binary entegrasyon paketi
 - Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %1,7'si işaretleniyor (0.6.0'da %2,2, v0.5.2'de %12,7)
 - Tespit benchmark'ı ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): izole laboratuvarda ayrılmış 150 malware örneğinin %71,3'ü işaretleniyor (0.7.0 skorlamasından önce %55,3)
 - Zorunlu bağımlılık: `pefile`, `ppdeep`, `dnfile` · opsiyonel: `yara-python`, `py-tlsh`
@@ -234,7 +234,7 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**495 test / ~5.300 satır.** Birim testleri her analizciyi sentetik girdilerle
+**519 test / ~5.400 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
 ekilmiş entropi adaları, sentetik sertifika tabloları, sınıflandırmayı bir
 zamanlar karesel yapan düşmanca string'ler). Entegrasyon paketi tüm boru

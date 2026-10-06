@@ -46,8 +46,14 @@ def test_ansi_and_wide_variants_are_one_function():
 
 
 def test_anti_recovery_reads_exe_spelled_commands():
-    hits = [StringHit("command", "bcdedit.exe /set {current} nx OptIn", 0, "ascii")]
+    hits = [StringHit("command", "bcdedit.exe /set {default} recoveryenabled No", 0, "ascii")]
     assert "anti-recovery" in {c.name for c in infer_capabilities({}, hits)}
+
+
+def test_bcdedit_that_does_not_touch_recovery_is_not_anti_recovery():
+    for text in ("bcdedit /set hypervisorlaunchtype auto", "bcdedit.exe /set {current} nx OptIn"):
+        hits = [StringHit("command", text, 0, "ascii")]
+        assert "anti-recovery" not in {c.name for c in infer_capabilities({}, hits)}, text
 
 
 def test_anti_recovery_keeps_every_command_as_evidence():
