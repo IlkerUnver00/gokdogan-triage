@@ -7,8 +7,8 @@ sky. The package and command are the ASCII `gokdogan`.
 extracts static features — never executing the sample — and produces a
 transparent, weighted verdict: `LIKELY_CLEAN`, `SUSPICIOUS`, or `HIGH_RISK`.
 
-- **~6,100 lines** of Python across 31 focused modules
-- **~4,300 lines** of tests · **345 tests** · real-binary integration suite
+- **~7,200 lines** of Python across 32 focused modules
+- **~5,300 lines** of tests · **495 tests** · real-binary integration suite
 - False-positive benchmark ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): 1.7% of held-out benign files flagged at 0.7.0 (2.2% at 0.6.0, 12.7% at v0.5.2)
 - Detection benchmark ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): 71.3% of 150 held-out malware samples flagged in an isolated lab (55.3% before the 0.7.0 scoring)
 - Hard deps: `pefile`, `ppdeep`, `dnfile` · optional: `yara-python`, `py-tlsh`
@@ -46,15 +46,16 @@ fast, and trustworthy for an analyst.
                           │  loader ─ hashes, imphash, sections,         │
                           │           anomalies, imports, delay-imports  │
                           │  rich   ─ toolchain hash + checksum          │
-                          │  fuzzy  ─ ssdeep / TLSH                       │
+                          │  fuzzy  ─ ssdeep / TLSH                      │
                           │  packers ─ known names + heuristics          │
-                          │  resources ─ embedded PEs, high-entropy       │
+                          │  golang ─ Go build info + function table     │
+                          │  resources ─ embedded PEs, high-entropy      │
                           │  blobs  ─ encrypted-config entropy islands   │
                           │  strings_ext ─ classified IOC strings        │
-                          │  decoded ─ XOR/ADD/ROL/base64/hex recovery    │
+                          │  decoded ─ XOR/ADD/ROL/base64/hex recovery   │
                           │  exports ─ launch-mechanism exports          │
                           │  capabilities ─ APIs+evidence → behavior tags│
-                          │  attack ─ capabilities/YARA → MITRE ATT&CK    │
+                          │  attack ─ capabilities/YARA → MITRE ATT&CK   │
                           │  yara   ─ weighted rule matches              │
                           │  verdict ─ transparent weighted score        │
                           └───────────────────────┬──────────────────────┘
@@ -68,7 +69,7 @@ fully decoupled.
 
 ---
 
-## 3. Module map (31 modules, by layer)
+## 3. Module map (32 modules, by layer)
 
 **Core**
 - [`engine.py`](gokdogan/engine.py) — orchestrator; the entire `triage()` pipeline
@@ -90,6 +91,7 @@ fully decoupled.
 - [`overlay.py`](gokdogan/overlay.py) — overlay content: magic-byte type, entropy, embedded PE
 - [`signature.py`](gokdogan/signature.py) — Authenticode verification (WinVerifyTrust) + cert names
 - [`dotnet.py`](gokdogan/dotnet.py) — .NET: CLR header, obfuscators, metadata references, P/Invoke and IL call sites (dnfile)
+- [`golang.py`](gokdogan/golang.py) — Go: build info (version, modules, build settings) and the function table (packages, linked Windows API wrappers, source paths); descriptive, not scored yet
 
 **Content**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE extraction + IOC classification
@@ -124,7 +126,7 @@ fully decoupled.
 
 | Axis | Signals |
 |---|---|
-| **Identity / clustering** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
+| **Identity / clustering** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH, Go build ID and main module |
 | **Structure** | per-section + overall entropy, entropy islands, packer detection, W+X sections, TLS callbacks, oversized overlay, wiped/future timestamps, checksum mismatch |
 | **Content** | classified IOC strings (URL/IP/domain/registry/PDB/command/UA), XOR/ADD/ROL/base64/hex-recovered strings, embedded PEs, encrypted-config blobs |
 | **Behavior** | import + delay-import + export + .NET metadata/P/Invoke capabilities (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) with per-rule minimum hit counts |
@@ -228,7 +230,7 @@ Pipeline-friendly exit codes: `0` clean · `2` suspicious · `3` high risk.
 
 ## 7. Testing
 
-**345 tests / ~4,300 lines.** Unit tests cover each analyzer in isolation with
+**495 tests / ~5,300 lines.** Unit tests cover each analyzer in isolation with
 synthetic inputs (crafted XOR/base64 payloads, fake PE buffers, planted
 entropy islands, synthetic certificate tables, hostile strings that once made
 classification quadratic). The integration suite runs the full pipeline

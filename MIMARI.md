@@ -8,8 +8,8 @@
 örneği **hiç çalıştırmadan** statik özelliklerini çıkarır ve şeffaf, ağırlıklı
 bir verdikt üretir: `LIKELY_CLEAN`, `SUSPICIOUS` veya `HIGH_RISK`.
 
-- 31 odaklı modülde **~6.100 satır** Python
-- **~4.300 satır** test · **345 test** · gerçek binary entegrasyon paketi
+- 32 odaklı modülde **~7.200 satır** Python
+- **~5.300 satır** test · **495 test** · gerçek binary entegrasyon paketi
 - Yanlış-pozitif benchmark'ı ([`scripts/benign_sweep.py`](scripts/benign_sweep.py)): ayarlamada kullanılmamış zararsız dosyaların %1,7'si işaretleniyor (0.6.0'da %2,2, v0.5.2'de %12,7)
 - Tespit benchmark'ı ([`scripts/recall_sweep.py`](scripts/recall_sweep.py)): izole laboratuvarda ayrılmış 150 malware örneğinin %71,3'ü işaretleniyor (0.7.0 skorlamasından önce %55,3)
 - Zorunlu bağımlılık: `pefile`, `ppdeep`, `dnfile` · opsiyonel: `yara-python`, `py-tlsh`
@@ -47,16 +47,17 @@ etrafında düzenlendi.
    (çalıştırılmaz)        │                                              │
                           │  loader ─ hashler, imphash, section,         │
                           │           anomali, import, delay-import      │
-                          │  rich   ─ araç zinciri hash + checksum        │
-                          │  fuzzy  ─ ssdeep / TLSH                       │
+                          │  rich   ─ araç zinciri hash + checksum       │
+                          │  fuzzy  ─ ssdeep / TLSH                      │
                           │  packers ─ bilinen isim + sezgisel           │
-                          │  resources ─ gömülü PE, yüksek entropi        │
+                          │  golang ─ Go derleme bilgisi + pclntab       │
+                          │  resources ─ gömülü PE, yüksek entropi       │
                           │  blobs  ─ şifreli-config entropi adaları     │
                           │  strings_ext ─ sınıflandırılmış IOC string   │
-                          │  decoded ─ XOR/ADD/ROL/base64/hex kurtarma    │
+                          │  decoded ─ XOR/ADD/ROL/base64/hex kurtarma   │
                           │  exports ─ fırlatma mekanizması export'ları  │
                           │  capabilities ─ API+kanıt → davranış etiketi │
-                          │  attack ─ capability/YARA → MITRE ATT&CK      │
+                          │  attack ─ capability/YARA → MITRE ATT&CK     │
                           │  yara   ─ ağırlıklı kural eşleşmeleri        │
                           │  verdict ─ şeffaf ağırlıklı skor             │
                           └───────────────────────┬──────────────────────┘
@@ -69,7 +70,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 
 ---
 
-## 3. Modül haritası (31 modül, katmana göre)
+## 3. Modül haritası (32 modül, katmana göre)
 
 **Çekirdek**
 - [`engine.py`](gokdogan/engine.py) — orkestratör; tüm `triage()` boru hattı
@@ -91,6 +92,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 - [`overlay.py`](gokdogan/overlay.py) — overlay içeriği: magic-byte tip, entropi, gömülü PE
 - [`signature.py`](gokdogan/signature.py) — Authenticode doğrulama (WinVerifyTrust) + sertifika adları
 - [`dotnet.py`](gokdogan/dotnet.py) — .NET: CLR başlığı, obfuscator'lar, metadata referansları, P/Invoke ve IL çağrı noktaları (dnfile)
+- [`golang.py`](gokdogan/golang.py) — Go: derleme bilgisi (sürüm, modüller, derleme ayarları) ve fonksiyon tablosu (paketler, bağlanan Windows API sarmalayıcıları, kaynak yolları); yalnızca betimler, henüz skorlanmaz
 
 **İçerik**
 - [`strings_ext.py`](gokdogan/strings_ext.py) — ASCII/UTF-16LE çıkarma + IOC sınıflandırma
@@ -125,7 +127,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 
 | Eksen | Sinyaller |
 |---|---|
-| **Kimlik / kümeleme** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH |
+| **Kimlik / kümeleme** | MD5·SHA1·SHA256, imphash, Rich-header hash, ssdeep, TLSH, Go build ID ve ana modül |
 | **Yapı** | bölüm + genel entropi, entropi adaları, packer tespiti, W+X bölümler, TLS callback, aşırı overlay, silinmiş/gelecek timestamp, checksum uyuşmazlığı |
 | **İçerik** | sınıflandırılmış IOC string (URL/IP/domain/registry/PDB/komut/UA), XOR/ADD/ROL/base64/hex-kurtarılmış string, gömülü PE, şifreli-config blob |
 | **Davranış** | import + delay-import + export + .NET metadata/P/Invoke capability'leri (injection, keylogging, persistence, anti-debug, anti-recovery, reflective-loading, dropper, …) minimum isabet sayısıyla |
@@ -232,7 +234,7 @@ Boru hattı dostu çıkış kodları: `0` temiz · `2` şüpheli · `3` yüksek 
 
 ## 7. Test
 
-**345 test / ~4.300 satır.** Birim testleri her analizciyi sentetik girdilerle
+**495 test / ~5.300 satır.** Birim testleri her analizciyi sentetik girdilerle
 izole eder (elle üretilmiş XOR/base64 payload'ları, sahte PE tamponları,
 ekilmiş entropi adaları, sentetik sertifika tabloları, sınıflandırmayı bir
 zamanlar karesel yapan düşmanca string'ler). Entegrasyon paketi tüm boru

@@ -317,6 +317,8 @@ def report_fields(report, use_yara: bool) -> dict:
         signed=report.file.is_signed,
         is_dll=report.file.is_dll,
         dotnet=report.dotnet is not None,
+        # None from an engine without the Go stage (--engine): unknown, not "not Go".
+        go=(report.go is not None) if hasattr(report, "go") else None,
         packed=report.packer.detected,
         breakdown=[[e.points, e.reason] for e in report.score_breakdown],
         # Structure, so a later analysis can weigh features the score does not
@@ -343,6 +345,38 @@ def _features(report) -> dict:
         sections=[[s.name, s.raw_size, s.virtual_size, s.entropy, s.is_executable, s.is_writable]
                   for s in report.sections[:32]],
         string_stats=dict(report.string_stats),
+        go=_go_features(getattr(report, "go", None)),
+    )
+
+
+# Build settings worth comparing across programs; the rest (paths, flags of
+# cgo compilers) would only bloat the rows.
+_GO_SETTINGS = ("-buildmode", "-compiler", "-trimpath", "-ldflags", "-tags", "CGO_ENABLED", "GOARCH",
+                "GOOS", "GOAMD64", "GO386", "vcs", "vcs.modified")
+
+
+def _go_features(go) -> dict | None:
+    """What the Go stage read, for the analysis of Go programs (10-20 KB a file)."""
+    if go is None:
+        return None
+    from gokdogan.golang import package_kind
+
+    kinds = {p: package_kind(p) for p in go.packages}
+    mod = go.main_module
+    return dict(
+        version=go.version, version_source=go.version_source, evidence=list(go.evidence),
+        confirmed=go.confirmed, ptr=go.ptr_size, buildinfo=go.buildinfo_format, layout=go.pclntab_layout,
+        functions=go.function_count, names=go.name_count, packages=go.package_count,
+        std=go.std_package_count, third_party=go.third_party_count, local=go.local_package_count,
+        third_party_packages=[p for p in go.packages if kinds[p] == "third-party"][:300],
+        local_packages=[p for p in go.packages if kinds[p] == "local"][:100],
+        main=go.main_path, module=None if mod is None else f"{mod.path} {mod.version}".rstrip(),
+        deps=go.dep_count, modules=[d.path for d in go.deps][:300],
+        settings={k: v[:200] for k, v in go.settings.items() if k in _GO_SETTINGS},
+        winapi=list(go.winapi), proc_call=go.proc_call, main_functions=go.main_functions[:50],
+        build_id=go.build_id is not None, cgo=go.cgo, trimpath=go.trimpath,
+        source_paths=go.source_path_count, goroot=go.goroot is not None,
+        obfuscation=list(go.obfuscation), embedded=len(go.embedded), notes=go.notes[:5],
     )
 
 

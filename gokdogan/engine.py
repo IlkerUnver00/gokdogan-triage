@@ -12,6 +12,7 @@ from .dotnet import analyze_dotnet, read_references
 from .entropy import shannon_entropy
 from .exports import parse_exports
 from .extractors import extract_config
+from .golang import analyze_go
 from .hashes import authentihash, impfuzzy
 from .loader import (
     NotAPEError,
@@ -89,6 +90,8 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
         stack_strings = recover_stackstrings(pe)
         managed = is_managed(pe)
         file_info.managed = managed
+        # Descriptive only: what a Go program's build info and function table say.
+        go = None if managed else analyze_go(pe, data)
         # A catalog lookup uses the hash of the bytes analysed here, never a
         # second read of a file that may have changed since.
         digests = ({"SHA256": file_info.authentihash or "", "SHA1": authentihash(pe, data, "sha1") or ""}
@@ -167,6 +170,7 @@ def _triage(pe, data: bytes, path: str | Path, rules_dir, min_string_length: int
     report = TriageReport(
         file=file_info,
         dotnet=dotnet,
+        go=go,
         signature=signature,
         overlay=overlay,
         rich=rich,
