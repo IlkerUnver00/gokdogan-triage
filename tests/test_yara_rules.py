@@ -91,3 +91,20 @@ def test_sweep_rows_record_which_strings_matched():
                          (b".rdata", b"\0powershell.exe -NoProfile -enc SQBFAFgA\0", RDATA)])[0]
     row = report_fields(triage_bytes(blob, name="x.exe"), use_yara=True)
     assert row["yara_strings"]["PowerShell_EncodedCommand"] == ["$enc", "$nop", "$ps"]
+
+
+def test_sweep_rows_record_the_command_strings():
+    import sys
+    from pathlib import Path
+
+    from gofixtures import RDATA, TEXT, build_pe
+
+    from gokdogan.engine import triage_bytes
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from benign_sweep import report_fields
+
+    blob = build_pe(64, [(b".text", b"\xc3" * 64, TEXT),
+                         (b".rdata", b"\0bcdedit /set hypervisorlaunchtype auto\0bcdedit /set testsigning on\0", RDATA)])[0]
+    features = report_fields(triage_bytes(blob, name="x.exe", use_yara=False), use_yara=False)["features"]
+    assert features["commands"] == ["bcdedit /set testsigning on"]

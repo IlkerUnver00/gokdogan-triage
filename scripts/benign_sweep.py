@@ -348,6 +348,9 @@ def _features(report) -> dict:
         sections=[[s.name, s.raw_size, s.virtual_size, s.entropy, s.is_executable, s.is_writable]
                   for s in report.sections[:32]],
         string_stats=dict(report.string_stats),
+        # The command strings that scored, so a command rule can be tightened
+        # from the rows (a few, cut short: the text is the sample's).
+        commands=[h.value[:200] for h in report.strings if h.category == "command"][:20],
         go=_go_features(getattr(report, "go", None)),
     )
 

@@ -8,8 +8,9 @@ All notable changes to **gokdogan** are documented here. The format follows
 
 ### Added
 - Sweep rows record which strings of each YARA rule matched
-  (`yara_strings`, identifiers only), so a rule can be tightened from the
-  rows of a lab run.
+  (`yara_strings`, identifiers only) and the command strings that scored
+  (`features.commands`, the first 20, cut to 200 characters), so a rule
+  can be tightened from the rows of a lab run.
 - **Go stage** (`gokdogan/golang.py`). A Go program imports what every Go
   program imports, so its import table and imphash say almost nothing; the
   build info and the function table the Go linker always writes do. Both are
