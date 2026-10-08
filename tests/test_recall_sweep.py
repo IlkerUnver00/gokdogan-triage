@@ -536,6 +536,20 @@ def test_zip_member_items_survive_colons_in_folder_and_member_names():
     assert rs._member("/lab::2025/sample.exe") is None
 
 
+def test_a_run_never_overwrites_an_earlier_one(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _zip(corpus / "ok.zip", [("note.txt", b"not a PE")])
+    out = tmp_path / "out"
+    rs.main(["--corpus", str(corpus), "--out", str(out), "--no-yara", "--jobs", "1"])
+    before = (out / "results.jsonl").read_bytes()
+    with pytest.raises(SystemExit):
+        rs.main(["--corpus", str(corpus), "--out", str(out), "--no-yara", "--jobs", "1"])
+    assert (out / "results.jsonl").read_bytes() == before
+    # re-summarising an earlier run into its own folder stays allowed
+    rs.main(["--report", str(out / "results.jsonl"), "--out", str(out)])
+
+
 def test_what_was_left_out_before_triage_reaches_the_summary(tmp_path):
     corpus = tmp_path / "corpus"
     corpus.mkdir()

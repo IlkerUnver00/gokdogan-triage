@@ -7,6 +7,16 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `scripts/lab_session.sh`: one guided recall-lab session. It checks the
+  arguments (days against the manifest), the environment and that no host
+  folder is shared into the VM, downloads the batches (and builds the
+  manifest) while online, waits until the network is cut and verifies it,
+  sweeps with this checkout and optionally an older release for
+  comparison, deletes the samples (also when anything stops it) and serves
+  the results for copying out. BENCHMARK.md also describes a data disk for
+  the corpus.
+- `recall_sweep.py` refuses an `--out` folder that already holds a run: a
+  lab run's samples are gone by the time anyone notices it was overwritten.
 - Sweep rows record which strings of each YARA rule matched
   (`yara_strings`, identifiers only) and the command strings that scored
   (`features.commands`, the first 20, cut to 200 characters), so a rule

@@ -114,7 +114,7 @@ The scripts live in the repository, not in the PyPI package.
    as Python 3.14):
 
    ```bash
-   sudo apt update && sudo apt install -y python3-venv python3-dev build-essential git
+   sudo apt update && sudo apt install -y python3-venv python3-dev build-essential git wget unzip
    git clone https://github.com/IlkerUnver00/gokdogan-triage.git ~/gokdogan
    python3 -m venv ~/gkd-venv && source ~/gkd-venv/bin/activate
    cd ~/gokdogan && pip install -e ".[dev]" pyzipper && python -m pytest -q
@@ -145,6 +145,76 @@ The scripts live in the repository, not in the PyPI package.
    python scripts/recall_sweep.py --report recall_results/results.jsonl \
        --benign sweep_results/holdout/results.jsonl --out recall_results
    ```
+
+A run never overwrites an earlier one: `recall_sweep.py` refuses an `--out`
+folder that already holds a `results.jsonl`, since the samples behind it
+are gone by then. That guard lives in the VM, and a revert empties it: when
+copying results out, give each run a folder of its own outside too.
+
+#### A guided session
+
+`scripts/lab_session.sh` runs steps 2 and 3 with the checks between them,
+so a session is one command and two clicks in Hyper-V Manager:
+
+```bash
+source ~/gkd-venv/bin/activate && cd ~/gokdogan
+bash scripts/lab_session.sh --name r3 --days 2026-10-05 2026-10-06 \
+    --build-manifest --also-ref v0.7.0
+```
+
+Before anything is downloaded it checks the arguments (each day a real,
+past day, shown with its weekday for you to confirm, and covered by the
+manifest), that the virtual environment imports this checkout, that no host
+folder is shared into the VM, that the output folders do not exist yet and
+that the lab folder has room (1.5 GB a day), and it asks whether the
+clipboard is off. While the VM is online it downloads the batches (and,
+with `--build-manifest`, the CSV export, with the Auth-Key saved in
+`~/.mb_key`; the key never appears in a command line or a message) and
+makes sure each `--also-ref` engine loads. It then waits until the network
+is cut: no route out, and neither ping nor HTTPS answers (or, if the link
+stays up, your word that Hyper-V shows the switch as Not connected). It
+sweeps with this checkout and with each `--also-ref` (a git worktree of
+that tag, for comparing engines on the same samples), checks the network is
+still cut after each sweep, deletes every sample, has you delete any crash
+report written meanwhile, waits until the network is back and serves the
+results for copying out.
+
+Output goes to `<lab>/results/<name>[-<ref>]`, with a `lab_session.txt`
+recording the checkout, the days and when the VM was offline. Whatever
+stops the script (an error, a failed download, Ctrl+C), it deletes the
+samples on the way out. `--manifest FILE` reuses a committed manifest
+instead of building one, and `--dry-run --yes` walks through the whole
+session without a network or a sample (`--yes` is refused without
+`--dry-run`).
+
+#### A data disk for the corpus
+
+A 12 GB VM disk holds the system and little else, and a daily batch can
+take up to about 1.5 GB. A second virtual disk keeps the corpus off the
+system disk and is reset by every revert:
+
+1. With the VM off, in Hyper-V Manager: VM **Settings** > **SCSI
+   Controller** > **Hard Drive** > **Add** > **New**: a dynamically
+   expanding VHDX of 40 GB. Keep Hyper-V's own folder for it, never one a
+   cloud service (OneDrive, Dropbox) syncs.
+2. Start the VM and find the new disk: `lsblk -o NAME,SIZE,TYPE,FSTYPE`
+   lists it as a 40G disk with no partitions and no FSTYPE, usually `sdb`.
+   Format that disk only (`mkfs` erases whatever it is given), and mount it:
+
+   ```bash
+   sudo mkfs.ext4 -L labdata /dev/sdb
+   sudo mkdir -p /mnt/lab
+   echo 'LABEL=labdata /mnt/lab ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+   sudo mount /mnt/lab && sudo chown "$USER" /mnt/lab
+   ```
+
+3. Take a new checkpoint with a name of its own (say `clean-with-disk`) and
+   revert to that one from now on, with **Apply**. A checkpoint also holds
+   the VM's configuration: applying one taken before the disk was added
+   detaches the disk, while applying this one resets the disk to its state
+   at the checkpoint, formatted and empty.
+
+`lab_session.sh` uses `/mnt/lab` when it is mounted, and `~/lab` otherwise.
 
 ### Reading the results
 

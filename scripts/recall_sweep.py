@@ -789,6 +789,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if not args.corpus or not Path(args.corpus).is_dir():
             ap.error("--corpus must be an existing folder (or use --report)")
+        if (out / "results.jsonl").exists():
+            # A lab run cannot be repeated on a whim: its samples are gone.
+            ap.error(f"{out} already holds a run (results.jsonl): choose another --out, "
+                     "or move that folder away first")
         corpus = Path(args.corpus)
         _refuse_synced(corpus)
         fraction = args.holdout_fraction or 0.3
