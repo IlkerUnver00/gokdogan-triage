@@ -240,9 +240,12 @@ system disk and is reset by every revert:
   could move a sample either way: a valid signature takes 15 points off and
   lifts the rules for unvouched programs (the import-less packing entry, the
   unreadable-image floor, the 12/10 weights); a revoked one adds 15 and a
-  tampered one 30 (less the 12/10 extras it no longer gets). The lab worker scores every signed sample a second time as if
-  its signature were valid (`score_if_valid` in `results.jsonl`), and the
-  summary reports the rate had every signature been valid from that.
+  tampered one 30 (less the 12/10 extras it no longer gets). The lab worker
+  scores every signed sample a second time as if its signature were valid
+  (`score_if_valid` in `results.jsonl`, with its reasons in
+  `breakdown_if_valid`), and the summary reports the rate had every
+  signature been valid from that. The reasons let signed malware be set
+  against validly signed benign files rule by rule.
 - **Threshold table.** With `--benign`, the summary shows detection against
   the benign flag rate at each score threshold. It warns when the two runs
   used different engine code or when YARA ran on one side and not the other.
