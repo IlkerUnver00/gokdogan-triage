@@ -290,6 +290,7 @@ gokdogan/
 │   ├── attack.py         # capability/YARA → MITRE ATT&CK technique mapping
 │   ├── yara_scan.py      # optional yara-python integration
 │   ├── verdict.py        # weighted scoring, thresholds
+│   ├── signals.py        # stable signal ID for each scoring rule
 │   ├── models.py         # dataclasses shared by all stages
 │   ├── report.py         # ANSI console + JSON renderers
 │   ├── html_report.py    # self-contained HTML report (escaped, theme-aware)

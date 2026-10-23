@@ -175,7 +175,7 @@ def dropper() -> TriageReport:
         file=_file(),
         capabilities=[_cap("embedded-executable", 3), _cap("execution", 1),
                       _cap("persistence-registry", 1)],
-        anomalies=["resource RCDATA/101: embedded PE executable (98304 bytes)",
+        anomalies=["resource RCDATA/101: embedded PE executable",
                    "resource RCDATA/102: high entropy 7.95 (packed/encrypted)"],
     )
 

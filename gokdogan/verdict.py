@@ -11,6 +11,7 @@ from .entropy import HIGH_ENTROPY_FILE
 from .loader import _LOW_IMPORTS, is_packing_anomaly
 from .models import Capability, ScoreEntry, TriageReport, Verdict, YaraHit
 from .overlay import MIN_HIDDEN_BYTES
+from .signals import anomaly_signal, timestamp_signal
 from .yara_scan import MAX_MATCHED
 
 SUSPICIOUS_THRESHOLD = 30
@@ -95,17 +96,20 @@ def score_report(report: TriageReport) -> None:
 
     if report.packer.detected:
         names = ", ".join(report.packer.names) or "unknown"
-        add(ScoreEntry(15, f"packer detected: {names}"), is_packing=True)
+        signal = "packing.packer-heuristic" if report.packer.heuristic else "packing.packer-named"
+        add(ScoreEntry(15, f"packer detected: {names}", signal), is_packing=True)
 
     if report.overall_entropy >= HIGH_ENTROPY_FILE:
-        add(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}"), is_packing=True)
+        add(ScoreEntry(10, f"overall file entropy {report.overall_entropy:.2f}", "packing.file-entropy"),
+            is_packing=True)
 
     tampered = report.signature is not None and report.signature.status == "tampered"
     for anomaly in report.anomalies:
         points = _WEAK_ANOMALY_POINTS if anomaly.startswith(_WEAK_ANOMALIES) else 6
         if not _credited(report) and not tampered:   # tampered already scores 30 for this
             points = next((p for text, p in _UNVOUCHED_POINTS.items() if anomaly.startswith(text)), points)
-        add(ScoreEntry(points, f"anomaly: {anomaly}"), is_packing=is_packing_anomaly(anomaly))
+        add(ScoreEntry(points, f"anomaly: {anomaly}", anomaly_signal(anomaly)),
+            is_packing=is_packing_anomaly(anomaly))
         # A program can only act through its imports or by resolving the API
         # itself, as a shellcode stager or packer stub does: with five or fewer
         # (or none) and nobody vouching for it, it is treated as packed. DLLs,
@@ -114,22 +118,26 @@ def score_report(report: TriageReport) -> None:
                 and _unvouched_program(report) and not report.file.managed
                 and report.file.entry_point):
             add(ScoreEntry(_PACKING_CAP - points, "program with almost no imports: "
-                                                  "the API is resolved at run time, treated as packed"),
+                                                  "the API is resolved at run time, treated as packed",
+                           "packing.import-less-program"),
                 is_packing=True)
 
     if report.file.compile_timestamp_anomaly:
-        entries.append(ScoreEntry(5, report.file.compile_timestamp_anomaly))
+        entries.append(ScoreEntry(5, report.file.compile_timestamp_anomaly,
+                                  timestamp_signal(report.file.compile_timestamp_anomaly)))
 
     common_points = 0
     for cap in report.capabilities:
-        entry = ScoreEntry(_cap_points(cap), f"capability: {cap.name}")
+        entry = ScoreEntry(_cap_points(cap), f"capability: {cap.name}",
+                           f"capability.{cap.name}.{'+'.join(cap.origins or [cap.source])}")
         entries.append(entry)
         if cap.severity <= 2 and cap.source in _STRUCTURAL_SOURCES:
             common_points += entry.points
     if report.import_count >= _LARGE_IMPORT_TABLE and common_points > _COMMON_CAP:
         entries.append(ScoreEntry(_COMMON_CAP - common_points,
                                   f"cap: common capabilities of a large program "
-                                  f"({report.import_count} imports) capped at {_COMMON_CAP}"))
+                                  f"({report.import_count} imports) capped at {_COMMON_CAP}",
+                                  "cap.common-capabilities"))
 
     capabilities = {c.name: c for c in report.capabilities}
     for hit in report.yara:
@@ -142,19 +150,21 @@ def score_report(report: TriageReport) -> None:
             # file): count it once, at the higher of the two weights.
             entries.append(ScoreEntry(max(0, points - _cap_points(cap)),
                                       f"YARA match: {hit.rule} (same evidence as capability "
-                                      f"{cap.name}, counted once)"))
+                                      f"{cap.name}, counted once)", f"yara.{hit.rule}"))
             continue
-        add(ScoreEntry(points, f"YARA match: {hit.rule}"), is_packing="packer" in hit.tags)
+        add(ScoreEntry(points, f"YARA match: {hit.rule}", f"yara.{hit.rule}"), is_packing="packer" in hit.tags)
 
     ioc_count = sum(
         report.string_stats.get(k, 0) for k in ("url", "ipv4", "domain")
     )
     if ioc_count:
-        entries.append(ScoreEntry(min(ioc_count, _IOC_CAP), f"{ioc_count} network IOC string(s)"))
+        entries.append(ScoreEntry(min(ioc_count, _IOC_CAP), f"{ioc_count} network IOC string(s)",
+                                  "strings.network-ioc"))
 
     cmd_count = report.string_stats.get("command", 0)
     if cmd_count:
-        entries.append(ScoreEntry(min(4 * cmd_count, 16), f"{cmd_count} suspicious command string(s)"))
+        entries.append(ScoreEntry(min(4 * cmd_count, 16), f"{cmd_count} suspicious command string(s)",
+                                  "strings.commands"))
 
     # Encoded IOCs/commands are especially damning: a benign program has no
     # reason to XOR-hide a URL or an embedded PE.
@@ -164,19 +174,19 @@ def score_report(report: TriageReport) -> None:
     ]
     if hidden:
         entries.append(ScoreEntry(min(8 * len(hidden), 24),
-                                  f"{len(hidden)} encoded IOC/payload string(s) recovered"))
+                                  f"{len(hidden)} encoded IOC/payload string(s) recovered", "strings.encoded"))
 
     # Extracted family config (a Discord webhook, Telegram token, stager URL)
     # is about as close to a smoking gun as static triage gets.
     if report.config_extractions:
         families = sorted({c.family for c in report.config_extractions})
         entries.append(ScoreEntry(min(15 * len(families), 30),
-                                  f"extracted config: {', '.join(families)}"))
+                                  f"extracted config: {', '.join(families)}", "config.extracted"))
 
     packed_points = sum(e.points for e in packing)
     if packed_points > _PACKING_CAP:
         entries.append(ScoreEntry(_PACKING_CAP - packed_points,
-                                  f"cap: packing signals are one fact, capped at {_PACKING_CAP}"))
+                                  f"cap: packing signals are one fact, capped at {_PACKING_CAP}", "cap.packing"))
 
     # Online reputation (opt-in, attached by the CLI): the wider world's verdict.
     rep_points, rep_reasons = 0, []
@@ -198,7 +208,8 @@ def score_report(report: TriageReport) -> None:
             rep_points += 20
             rep_reasons.append("known sample on MalwareBazaar" + (f" ({rep.family})" if rep.family else ""))
     if rep_points:
-        entries.append(ScoreEntry(min(rep_points, 35), "reputation: " + ", ".join(rep_reasons)))
+        entries.append(ScoreEntry(min(rep_points, 35), "reputation: " + ", ".join(rep_reasons),
+                                  "reputation"))
 
     # Authenticode: only a *verified* signature is a mitigation. A tampered or
     # revoked one is damning. A signature that is present but not valid
@@ -212,7 +223,7 @@ def score_report(report: TriageReport) -> None:
         if sig_valid and padded:
             entries.append(ScoreEntry(0, "Authenticode signature valid but the certificate "
                                          "table carries unauthenticated data — no mitigation "
-                                         "credit"))
+                                         "credit", "signature.valid-padded"))
         elif sig_valid and entries:
             # A verified signature is a real mitigation: a flat credit, and a
             # floor below stops it clearing a sample that carries a sev-3
@@ -221,14 +232,17 @@ def score_report(report: TriageReport) -> None:
             # entry, the unreadable-image floor, the 12/10 weights) never
             # applied: compared with the same bytes unsigned, a valid signature
             # can be worth more than one tier.
-            entries.append(ScoreEntry(-15, f"Authenticode signature valid ({sig.signer or 'signed'})"))
+            entries.append(ScoreEntry(-15, f"Authenticode signature valid ({sig.signer or 'signed'})",
+                                      "signature.valid"))
         elif sig.status == "tampered":
-            entries.append(ScoreEntry(30, "Authenticode digest mismatch — file modified after signing"))
+            entries.append(ScoreEntry(30, "Authenticode digest mismatch — file modified after signing",
+                                      "signature.tampered"))
         elif sig.status == "revoked":
-            entries.append(ScoreEntry(15, "Authenticode signing certificate revoked"))
+            entries.append(ScoreEntry(15, "Authenticode signing certificate revoked",
+                                      "signature.revoked"))
         elif sig.present and entries:
             entries.append(ScoreEntry(0, f"Authenticode signature present but {sig.status}"
-                                         " — no mitigation credit"))
+                                         " — no mitigation credit", f"signature.{sig.status}"))
 
     report.score_breakdown = entries
     report.score = max(0, sum(e.points for e in entries))
@@ -240,7 +254,8 @@ def score_report(report: TriageReport) -> None:
     if sig_valid and any(c.severity == 3 for c in report.capabilities):
         pre_sig = sum(e.points for e in entries if not e.reason.startswith("Authenticode signature valid"))
         if pre_sig >= SUSPICIOUS_THRESHOLD and report.score < SUSPICIOUS_THRESHOLD:
-            _floor(report, "floor: valid signature does not clear a sev-3 capability")
+            _floor(report, "floor: valid signature does not clear a sev-3 capability",
+                   "floor.valid-signature-sev3")
 
     # An unknown crypter or bundle hides as much as a named packer, and the
     # rule for those applies: a program nobody vouches for whose image is
@@ -249,7 +264,7 @@ def score_report(report: TriageReport) -> None:
     if (_unvouched_program(report) and report.image_entropy >= HIGH_ENTROPY_FILE
             and report.score < SUSPICIOUS_THRESHOLD):
         _floor(report, f"floor: unreadable program nobody vouches for (image entropy "
-                       f"{report.image_entropy:.2f}) is not cleared statically")
+                       f"{report.image_entropy:.2f}) is not cleared statically", "floor.unreadable-program")
 
     if report.score >= HIGH_RISK_THRESHOLD:
         report.verdict = Verdict.HIGH_RISK
@@ -259,9 +274,9 @@ def score_report(report: TriageReport) -> None:
         report.verdict = Verdict.LIKELY_CLEAN
 
 
-def _floor(report: TriageReport, reason: str) -> None:
+def _floor(report: TriageReport, reason: str, signal: str) -> None:
     """Raise the score to SUSPICIOUS, with the lift shown as an entry of its own."""
-    report.score_breakdown.append(ScoreEntry(SUSPICIOUS_THRESHOLD - report.score, reason))
+    report.score_breakdown.append(ScoreEntry(SUSPICIOUS_THRESHOLD - report.score, reason, signal))
     report.score = SUSPICIOUS_THRESHOLD
 
 

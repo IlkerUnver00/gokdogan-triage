@@ -41,6 +41,7 @@ from benign_sweep import (  # noqa: E402
     HIGH_RISK,
     SUSPICIOUS,
     _code_hash,
+    _signals,
     exit_past_stuck_workers,
     normalize,
     report_fields,
@@ -254,6 +255,7 @@ def _triage_sample(args: tuple[str, bool, bytes, int]) -> dict:
                     twin = _as_if_valid(report)
                     row["score_if_valid"] = twin.score
                     row["breakdown_if_valid"] = [[e.points, e.reason] for e in twin.score_breakdown]
+                    row["signals_if_valid"] = _signals(twin.score_breakdown)
             except NotAPEError as exc:
                 row.update(error=f"MZ file the PE parser rejects ({exc})"[:300], unparsed=True)
             except Exception as exc:  # the engine failed on a PE: a miss for recall
