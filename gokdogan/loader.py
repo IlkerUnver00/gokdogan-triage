@@ -38,6 +38,11 @@ _SUBSYSTEM = {
 # packing signals by these exact texts.
 FLAG_WX = "W+X"
 FLAG_UNPACK_TARGET = "zero raw size (unpacking target)"
+# The anomaly note for a zero-raw section that is not executable: memory a
+# compiler reserves for uninitialised data (.bss, Delphi BSS, .tls), not
+# code a stub unpacks into. The section keeps FLAG_UNPACK_TARGET, which the
+# packer heuristic reads; only the note, and so its signal, differs.
+NOTE_EMPTY_DATA = "zero raw size (uninitialised data)"
 FLAG_HOT_EXEC = "high-entropy executable section"
 
 _LOW_IMPORTS = re.compile(r"only \d+ imported functions \(likely resolved at runtime\)")
@@ -229,13 +234,22 @@ def build_sections(pe: pefile.PE) -> list[SectionInfo]:
     return sections
 
 
+def section_notes(sections: list[SectionInfo]) -> list[str]:
+    """One anomaly note per section flag; the flag text comes last."""
+    notes = []
+    for s in sections:
+        for flag in s.flags:
+            if flag == FLAG_UNPACK_TARGET and not s.is_executable:
+                flag = NOTE_EMPTY_DATA
+            notes.append(f"section {s.name!r}: {flag}")
+    return notes
+
+
 def find_anomalies(pe: pefile.PE, data: bytes, sections: list[SectionInfo]) -> list[str]:
     """Structural oddities that legitimate compilers rarely produce."""
     anomalies: list[str] = []
 
-    for s in sections:
-        for flag in s.flags:
-            anomalies.append(f"section {s.name!r}: {flag}")
+    anomalies += section_notes(sections)
 
     # Entry point outside any section, or in the last section (common after packing).
     entry_section = _entry_section(pe)

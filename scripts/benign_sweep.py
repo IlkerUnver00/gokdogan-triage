@@ -321,6 +321,10 @@ def report_fields(report, use_yara: bool) -> dict:
         go=(report.go is not None) if hasattr(report, "go") else None,
         packed=report.packer.detected,
         breakdown=[[e.points, e.reason] for e in report.score_breakdown],
+        # The rule behind each breakdown line, in the same order. None when a
+        # line has no ID (an older engine via --engine): normalize() the
+        # reasons then. An empty breakdown is [] from any engine.
+        signals=_signals(report.score_breakdown),
         # Structure, so a later analysis can weigh features the score does not
         # use yet without another lab run.
         features=_features(report),
@@ -328,6 +332,11 @@ def report_fields(report, use_yara: bool) -> dict:
         # the rows alone (identifiers only: matched text may be a sample's).
         yara_strings={h.rule: list(h.strings) for h in report.yara},
     )
+
+
+def _signals(breakdown) -> list[str] | None:
+    signals = [getattr(e, "signal", "") for e in breakdown]
+    return signals if all(signals) else None
 
 
 def _features(report) -> dict:

@@ -109,6 +109,7 @@ verdikt motoru yalnızca bu yapıyı okur. Sunum ve analiz tamamen ayrıktır.
 
 **Verdikt & raporlama**
 - [`verdict.py`](gokdogan/verdict.py) — şeffaf ağırlıklı skorlama
+- [`signals.py`](gokdogan/signals.py) — her skor satırının ardındaki kural için ölçümde kullanılan sabit kimlik
 - [`report.py`](gokdogan/report.py) — ANSI konsol + JSON
 - [`html_report.py`](gokdogan/html_report.py) — tek dosya, escape'li, tema-duyarlı HTML
 - [`summary.py`](gokdogan/summary.py) — batch CSV/JSONL için sample başına düz satır
