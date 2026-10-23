@@ -7,6 +7,10 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Lab rows of signed samples record the reasons behind `score_if_valid`
+  (`breakdown_if_valid`), so each rule's firing on signed malware can be
+  compared with validly signed benign software, where the lab cannot check
+  the signature.
 - `scripts/lab_session.sh`: one guided recall-lab session. It checks the
   arguments (days against the manifest), the environment and that no host
   folder is shared into the VM, downloads the batches (and builds the

@@ -104,6 +104,11 @@ def test_the_lab_worker_records_the_score_a_valid_signature_would_give(tmp_path,
     sample.write_bytes(b"MZ" + bytes(100))
     row = rs._triage_sample((str(sample), False, b"infected", 1 << 20))
     assert row["score"] == 30 and row["score_if_valid"] == 0
+    # ... and why, rule by rule: the anomaly stays, the rule for programs
+    # nobody vouches for goes, and the signature's credit comes in.
+    assert row["breakdown_if_valid"] == [[6, "anomaly: no import table"],
+                                         [-15, "Authenticode signature valid (assumed valid)"]]
+    assert [p for p, _ in row["breakdown"]] == [6, 24, 0]   # the row's own breakdown is unchanged
 
 
 def _zip(path, members, compression=zipfile.ZIP_DEFLATED):

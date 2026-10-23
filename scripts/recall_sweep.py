@@ -248,7 +248,12 @@ def _triage_sample(args: tuple[str, bool, bytes, int]) -> dict:
                 report = triage_bytes(data, name=sha, use_yara=use_yara)
                 row.update(report_fields(report, use_yara))
                 if report.file.is_signed:
-                    row["score_if_valid"] = _score_as_if_valid(report)
+                    # How the engine would score it had the signature checked
+                    # out, reason by reason, so signed malware can be set
+                    # against validly signed benign files rule for rule.
+                    twin = _as_if_valid(report)
+                    row["score_if_valid"] = twin.score
+                    row["breakdown_if_valid"] = [[e.points, e.reason] for e in twin.score_breakdown]
             except NotAPEError as exc:
                 row.update(error=f"MZ file the PE parser rejects ({exc})"[:300], unparsed=True)
             except Exception as exc:  # the engine failed on a PE: a miss for recall
@@ -361,11 +366,11 @@ def samples(rows: list[dict], manifest: dict[str, dict], holdout_fraction: float
             "counts": dict(sorted(counts.items()))}
 
 
-def _score_as_if_valid(report) -> int:
-    """The engine's own score for this report had its signature verified as
-    valid. The lab reads bytes, so no signature is ever checked; a valid one
-    takes 15 points off and also exempts the file from every rule for files
-    nobody vouches for."""
+def _as_if_valid(report):
+    """A copy of the report scored by the engine as if its signature had been
+    verified as valid; the report itself is untouched. The lab reads bytes, so
+    no signature is ever checked; a valid one takes 15 points off and also
+    exempts the file from every rule for files nobody vouches for."""
     import copy
 
     from gokdogan.models import SignatureInfo
@@ -374,7 +379,11 @@ def _score_as_if_valid(report) -> int:
     twin = copy.copy(report)
     twin.signature = SignatureInfo(status="valid", present=True, verified=True, signer="assumed valid")
     score_report(twin)
-    return twin.score
+    return twin
+
+
+def _score_as_if_valid(report) -> int:
+    return _as_if_valid(report).score
 
 
 def _score_if_signature_valid(row: dict) -> int:
