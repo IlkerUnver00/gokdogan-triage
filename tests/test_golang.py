@@ -409,8 +409,11 @@ def _real(path: Path) -> GoInfo | None:
 
 @pytest.mark.skipif(not GH.exists(), reason="GitHub CLI not installed")
 def test_gh():
+    # Time the analysis, not the read: a CI runner's cold disk takes seconds
+    # over 42 MB, while the stage itself takes a fraction of one.
+    data = GH.read_bytes()
     t = time.perf_counter()
-    g = _real(GH)
+    g = analyze_go(pefile.PE(data=data, fast_load=True), data)
     assert time.perf_counter() - t < 2.0
     assert g.version.startswith("go1.") and {"buildinfo", "pclntab"} <= set(g.evidence) and g.confirmed
     assert g.ptr_size == 8 and g.main_path == "github.com/cli/cli/v2/cmd/gh"
