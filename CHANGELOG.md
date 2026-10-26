@@ -7,6 +7,22 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The rate card: next to every score line, how often that rule fired on
+  labelled malware and on benign software (k/n with a 95% interval), for
+  files scored by the same rules (unsigned, validly signed, signed but not
+  verified, catalog-signed), flagged when one family or one product carries
+  the rate or when the rule fires at least as often on benign files. It is
+  built from a recall run and a benign sweep of the same engine code by
+  `scripts/rate_card.py`, read by `gokdogan/ratecard.py`, and shown in the
+  console, HTML and JSON (`rate_card`) reports when
+  `gokdogan/data/ratecard.json` ships (the web service's JSON too, and the
+  exe, which carries a stamp of its engine code). None ships yet: it waits
+  for the sweeps of the release it describes. Benign sweep rows of validly
+  signed files record how the file scores when its signature cannot be
+  checked (`signals_if_unverified`, `score_if_unverified`), the benign side
+  of the signed-but-unverified stratum. The console verdict also says how
+  far the score is from the thresholds around it, and when a floor holds
+  it, a cap binds or the score stops at 0.
 - Every score breakdown line carries a stable signal ID naming its rule
   (`anomaly.no-import-table`, `capability.process-injection.imports`,
   `yara.<rule>`, `floor.unreadable-program`, ...), free of the counts and

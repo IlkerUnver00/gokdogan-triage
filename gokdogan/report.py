@@ -10,6 +10,8 @@ from typing import TextIO
 
 from .golang import package_kind
 from .models import GoInfo, TriageReport, Verdict
+from .ratecard import card_note, line_note, margin, rates_for
+from .verdict import HIGH_RISK_THRESHOLD, SUSPICIOUS_THRESHOLD
 
 _RESET = "\x1b[0m"
 _BOLD = "\x1b[1m"
@@ -378,17 +380,33 @@ def render_console(report: TriageReport, stream: TextIO = sys.stdout) -> None:
 
     header("Verdict")
     style, label = _VERDICT_STYLE[report.verdict]
-    for entry in report.score_breakdown:
+    rates = rates_for(report)
+    if rates:
+        stream.write(c(_DIM, f"  {card_note(rates)}") + "\n")
+    for i, entry in enumerate(report.score_breakdown):
         sign = "+" if entry.points >= 0 else ""
         stream.write(f"  {sign}{entry.points:>3}  {entry.reason}\n")
+        note = line_note(rates["lines"][i]["rates"], entry.points, rates["min_n"]) if rates else None
+        if note:
+            stream.write(c(_DIM, f"         {note}") + "\n")
     stream.write(
         c(_BOLD + style, f"\n  {label}  (score {report.score}, "
-                         f"thresholds: suspicious ≥ 30, high risk ≥ 60)\n\n")
+                         f"thresholds: suspicious ≥ 30, high risk ≥ 60)\n")
     )
+    stream.write(c(_DIM, f"  {margin(report, SUSPICIOUS_THRESHOLD, HIGH_RISK_THRESHOLD)}") + "\n\n")
+
+
+def report_data(report: TriageReport) -> dict:
+    """The JSON report: the report itself plus its rate card lines, if a card ships."""
+    data = report.to_dict()
+    rates = rates_for(report)
+    if rates:
+        data["rate_card"] = rates
+    return data
 
 
 def render_json(report: TriageReport) -> str:
-    return json.dumps(report.to_dict(), indent=2, ensure_ascii=False)
+    return json.dumps(report_data(report), indent=2, ensure_ascii=False)
 
 
 def render_navigator_layer(report: TriageReport, name: str | None = None) -> str:

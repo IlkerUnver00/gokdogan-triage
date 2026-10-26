@@ -17,6 +17,7 @@ from html import escape
 
 from .golang import package_kind
 from .models import TriageReport, Verdict
+from .ratecard import card_note, line_note, rates_for
 from .report import go_summary
 
 _VERDICT_CLASS = {
@@ -105,13 +106,22 @@ def render_html(report: TriageReport) -> str:
 
     parts.append("<h2>Verdict rationale</h2>")
     if report.score_breakdown:
+        rates = rates_for(report)
+        notes = [line_note(line["rates"], line["points"], rates["min_n"]) or ""
+                 for line in rates["lines"]] if rates else []
+
+        def measured(i: int) -> str:
+            return f'<td class="muted">{_esc(notes[i])}</td>' if rates else ""
+
         rows = "".join(
             f'<tr><td class="num {"pos" if e.points >= 0 else "neg"}">'
-            f'{"+" if e.points >= 0 else ""}{e.points}</td><td>{_esc(e.reason)}</td></tr>'
-            for e in report.score_breakdown
+            f'{"+" if e.points >= 0 else ""}{e.points}</td><td>{_esc(e.reason)}</td>{measured(i)}</tr>'
+            for i, e in enumerate(report.score_breakdown)
         )
-        parts.append(f'<div class="card"><table><tr><th class="num">pts</th>'
-                     f"<th>reason</th></tr>{rows}</table></div>")
+        head = "<th>measured</th>" if rates else ""
+        caption = f'<p class="muted">{_esc(card_note(rates))}</p>' if rates else ""
+        parts.append(f'<div class="card">{caption}<table><tr><th class="num">pts</th>'
+                     f"<th>reason</th>{head}</tr>{rows}</table></div>")
     else:
         parts.append('<div class="card muted">no scoring signals</div>')
 

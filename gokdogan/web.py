@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from . import __version__
 from .engine import NotAPEError, triage
 from .html_report import render_html
+from .report import report_data
 
 app = FastAPI(title="gokdogan", version=__version__)
 
@@ -113,4 +114,4 @@ async def triage_json(file: UploadFile = File(...)):
         report = _triage_upload(data, file.filename or "upload")
     except NotAPEError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    return JSONResponse(report.to_dict())
+    return JSONResponse(report_data(report))

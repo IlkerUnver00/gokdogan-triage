@@ -49,6 +49,11 @@ jobs:
           # rules and yara-python, and dnfile for .NET metadata.
           $native = Get-Content smoke-native.json -Raw | ConvertFrom-Json
           if ($null -ne $native.yara_error) { throw "YARA did not run in the frozen exe: $($native.yara_error)" }
+          # When a rate card ships, the exe must carry it and know it was built for this code.
+          if (Test-Path gokdogan\data\ratecard.json) {
+            if ($null -eq $native.rate_card) { throw "the frozen exe did not load the rate card" }
+            if ($native.rate_card.card.describes_this_engine -ne $true) { throw "the frozen exe cannot match the rate card to its code" }
+          }
           .\dist\gokdogan.exe C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe --quiet --json smoke-dotnet.json
           if ($LASTEXITCODE -notin 0, 2, 3) { throw "frozen .NET triage failed with exit $LASTEXITCODE" }
           $dotnet = Get-Content smoke-dotnet.json -Raw | ConvertFrom-Json

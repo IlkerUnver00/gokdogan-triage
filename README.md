@@ -291,6 +291,7 @@ gokdogan/
 │   ├── yara_scan.py      # optional yara-python integration
 │   ├── verdict.py        # weighted scoring, thresholds
 │   ├── signals.py        # stable signal ID for each scoring rule
+│   ├── ratecard.py       # measured malware/benign firing rate per rule
 │   ├── models.py         # dataclasses shared by all stages
 │   ├── report.py         # ANSI console + JSON renderers
 │   ├── html_report.py    # self-contained HTML report (escaped, theme-aware)

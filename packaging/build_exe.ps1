@@ -12,12 +12,23 @@
 $ErrorActionPreference = "Continue"
 Set-Location (Join-Path $PSScriptRoot "..")
 
+# A frozen build keeps its modules in an archive and cannot hash its own
+# code, so the digest the rate card is matched against is written now, from
+# the source tree, and bundled. The card itself ships only once one is built.
+$code = python -c "from gokdogan import ratecard; print(ratecard.code_hash())"
+if ($LASTEXITCODE -ne 0 -or -not $code) { throw "could not compute the engine code hash" }
+New-Item -ItemType Directory -Force build\stamp | Out-Null
+Set-Content -Path build\stamp\engine_code_sha256.txt -Value $code.Trim() -Encoding ascii -NoNewline
+$data = @("--add-data", "build/stamp/engine_code_sha256.txt;gokdogan/data")
+if (Test-Path gokdogan\data\ratecard.json) { $data += "--add-data", "gokdogan/data/ratecard.json;gokdogan/data" }
+
 # The import graph from entry.py -> gokdogan.cli pulls in every analyzer, so
 # no --collect-submodules is needed; excluding the optional web stack keeps
 # fastapi/uvicorn (which the CLI never imports) out of the binary.
 pyinstaller --noconfirm --clean --onefile --console --noupx --name gokdogan `
     --paths . `
     --add-data "gokdogan/rules;gokdogan/rules" `
+    @data `
     --hidden-import yara `
     --hidden-import ppdeep `
     --exclude-module gokdogan.web `

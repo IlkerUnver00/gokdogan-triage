@@ -109,6 +109,7 @@ fully decoupled.
 **Verdict & reporting**
 - [`verdict.py`](gokdogan/verdict.py) — transparent weighted scoring
 - [`signals.py`](gokdogan/signals.py) — a stable ID for the rule behind each score line, for measurement
+- [`ratecard.py`](gokdogan/ratecard.py) — how often each rule fired on malware and on benign files, shown next to the score line ([BENCHMARK.md](BENCHMARK.md#the-rate-card))
 - [`report.py`](gokdogan/report.py) — ANSI console + JSON
 - [`html_report.py`](gokdogan/html_report.py) — self-contained, escaped, theme-aware HTML
 - [`summary.py`](gokdogan/summary.py) — flat per-sample rows for batch CSV/JSONL

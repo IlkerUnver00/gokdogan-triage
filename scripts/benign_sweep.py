@@ -395,6 +395,21 @@ def _go_features(go) -> dict | None:
     )
 
 
+def _as_if_unverified(report):
+    """A copy of the report scored as if its signature could not be checked
+    (what triage_bytes and a host without WinVerifyTrust see); the report
+    itself is untouched."""
+    import copy
+
+    from gokdogan.models import SignatureInfo
+    from gokdogan.verdict import score_report
+
+    twin = copy.copy(report)
+    twin.signature = SignatureInfo(status="unverified", present=True)
+    score_report(twin)
+    return twin
+
+
 def _triage_one(args: tuple[str, bool]) -> dict:
     path, use_yara = args
     report_start(path)
@@ -403,7 +418,16 @@ def _triage_one(args: tuple[str, bool]) -> dict:
     try:
         from gokdogan.engine import triage
 
-        row.update(report_fields(triage(path, use_yara=use_yara), use_yara))
+        report = triage(path, use_yara=use_yara)
+        row.update(report_fields(report, use_yara))
+        if report.file.is_signed and report.signature is not None and report.signature.status == "valid":
+            # How the engine scores the same file when nobody can check the
+            # signature, as in the lab and off Windows: the benign side of the
+            # rate card's signed-unvouched stratum, as the lab's twin is the
+            # malware side of signed-vouched.
+            twin = _as_if_unverified(report)
+            row["score_if_unverified"] = twin.score
+            row["signals_if_unverified"] = _signals(twin.score_breakdown)
     except Exception as exc:  # a parser failure is a result, not a crash
         row.update(error=f"{type(exc).__name__}: {exc}")
     row["seconds"] = round(time.perf_counter() - started, 3)
