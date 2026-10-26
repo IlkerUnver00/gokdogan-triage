@@ -263,3 +263,55 @@ Give the held-out rate with its 95% interval and counts, the rate counting
 unscored PEs as misses, the family-balanced held-out rate, the corpus
 (source, first-seen range, number of families, native/.NET share), and the
 engine version and code hash from `engine.json`.
+
+## The rate card
+
+A recall run and a benign sweep of the same engine code also say how often
+each scoring rule fired on either side. `scripts/rate_card.py` turns them
+into the rate card that reports show next to every score line
+(`gokdogan/data/ratecard.json`, read by `gokdogan/ratecard.py`):
+
+```bash
+python scripts/rate_card.py --malware recall_results --manifest ~/corpus/manifest.csv \
+    --malware-label "MalwareBazaar daily batches ..." \
+    --benign sweep_results/tune sweep_results/holdout \
+    --benign-label "installed software on one Windows 11 machine" \
+    --built 2026-11-02 --out gokdogan/data/ratecard.json
+```
+
+- **One engine, finished runs.** Every run must have finished
+  (`summary.json`) and share one engine code hash, and every row must carry
+  signal IDs (`signals`); older rows are refused rather than mapped from
+  their reason text. A report run by other engine code still shows the
+  card, saying the rates are approximate. Since the version string is part
+  of that code, bump it before the sweeps the card is built from. A frozen
+  exe cannot hash its own modules, so `packaging/build_exe.ps1` stamps the
+  digest into the bundle.
+- **Strata.** Rates are kept apart for files the scorer treats alike:
+  unsigned; signed with a valid signature that earns its credit
+  (`signed-vouched`); signed but not verified, or valid over a padded
+  certificate table (`signed-unvouched`: every signed sample in the lab,
+  and every signed file off Windows); and catalog-signed (benign only).
+  The lab cannot check a signature and this machine's software is nearly
+  all validly signed, so each side is scored a second time for the stratum
+  it lacks: a signed malware sample as if its signature were valid
+  (`signals_if_valid`), a validly signed benign file as if it could not be
+  checked (`signals_if_unverified`, written by `benign_sweep.py`). Lines
+  that state what the signature check found get no rate, since the second
+  scoring decides them. A program is compared with programs when every
+  side the stratum holds measured at least `--min-n` of them; otherwise
+  the line says it fell back to all files.
+- **What a rate rests on.** Each cell gives k/n with a 95% interval, and how
+  many families (malware) or product folders (benign) its hits come from
+  and the largest one's share. A cell under `--min-n` is shown as too few
+  measured, with its interval, and raises no flag. A rule is flagged when
+  most of its hits are one family or product beyond the population's own
+  concentration, when they come from three or fewer, and, for a line that
+  adds points, when it fires more often on benign files with the two
+  intervals apart. A rule this engine never saw fire reads 0 of the
+  stratum's n. The card names no file, path or product.
+- **Not a probability.** A rate says how often a rule fired on one corpus
+  and one machine. How likely a file is to be malicious also depends on how
+  common malware is where it came from, which the card cannot know, so no
+  report turns the rates into one. Reports run with `--rules` still show
+  the card's rates for YARA lines, which describe the bundled rules.

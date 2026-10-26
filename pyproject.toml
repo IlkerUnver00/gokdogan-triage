@@ -41,7 +41,7 @@ gokdogan = "gokdogan.cli:main"
 include = ["gokdogan*"]
 
 [tool.setuptools.package-data]
-gokdogan = ["rules/*.yar", "rules/*.yara"]
+gokdogan = ["rules/*.yar", "rules/*.yara", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
