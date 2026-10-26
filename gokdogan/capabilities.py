@@ -434,6 +434,7 @@ def infer_capabilities(
         existing = next((c for c in capabilities if c.name == "persistence-registry"), None)
         if existing:
             existing.severity = 3
+            existing.origins = sorted(set(existing.origins or [existing.source]) | {"strings"})
             existing.description += " — Run-key strings present"
             existing.evidence += [f"string: {s}" for s in run_key_strings[:5]]
         else:
@@ -546,6 +547,7 @@ def _merge_same_name(capabilities: list[Capability]) -> list[Capability]:
         if kept is None:
             merged[cap.name] = cap
             continue
+        kept.origins = sorted(set(kept.origins or [kept.source]) | set(cap.origins or [cap.source]))
         if cap.severity > kept.severity:
             kept.severity, kept.description = cap.severity, cap.description
         kept.evidence += [e for e in cap.evidence if e not in kept.evidence]

@@ -174,6 +174,9 @@ class PackerInfo:
     detected: bool
     names: list[str] = field(default_factory=list)      # e.g. ["UPX"]
     indicators: list[str] = field(default_factory=list)  # human-readable evidence
+    # Detected by the structural heuristic alone, no known packer's section
+    # name: a different rule, with a different false-positive rate.
+    heuristic: bool = False
 
 
 @dataclass
@@ -241,6 +244,10 @@ class Capability:
     # references), "strings", "decoded", "resources" or "sections". The verdict
     # caps only import/export/managed tags, and only in large programs.
     source: str = "imports"
+    # Every kind of evidence behind the tag once same-name tags are merged
+    # (native and .NET "network", imports upgraded by Run-key strings): the
+    # rules that fired, which source alone no longer says. Empty: [source].
+    origins: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -276,6 +283,9 @@ class Reputation:
 class ScoreEntry:
     points: int
     reason: str
+    # Which rule this is, stable across releases and free of the counts and
+    # names in the reason (see signals.py): what a measurement keys on.
+    signal: str = ""
 
 
 @dataclass

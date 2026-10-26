@@ -92,7 +92,8 @@ def detect_packer(sections: list[SectionInfo], import_count: int,
     # without a recognizable section name.
     heuristic_hits = bool(hot) + bool(unpack_targets) + tiny_imports
     detected = bool(names) or heuristic_hits >= 2
-    if detected and not names:
+    heuristic = detected and not names
+    if heuristic:
         names.append("unknown packer (heuristic)")
 
-    return PackerInfo(detected=detected, names=names, indicators=indicators)
+    return PackerInfo(detected=detected, names=names, indicators=indicators, heuristic=heuristic)

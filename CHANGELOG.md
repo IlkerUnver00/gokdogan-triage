@@ -7,6 +7,26 @@ All notable changes to **gokdogan** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Every score breakdown line carries a stable signal ID naming its rule
+  (`anomaly.no-import-table`, `capability.process-injection.imports`,
+  `yara.<rule>`, `floor.unreadable-program`, ...), free of the counts and
+  names in the reason text. It is in the JSON report (`signal`) and in sweep
+  rows (`signals`, `signals_if_valid`), so a rule's firing rate can be
+  measured across runs and releases. Where one reason covered rules with
+  different error rates, the IDs tell them apart, by structure, never by a
+  name the file chooses:
+  - an empty executable section (where a stub unpacks code) from an empty
+    data section (`.bss`, Delphi `BSS`, `.tls`), whose note now reads
+    "zero raw size (uninitialised data)";
+  - a known packer's section names (`packing.packer-named`) from the
+    structural heuristic (`packing.packer-heuristic`, new
+    `PackerInfo.heuristic`);
+  - a capability's evidence (`imports`, `managed`, `exports`, `strings`,
+    joined when merged; new `Capability.origins`), not its severity, which
+    calibration changes.
+
+  Every anomaly reason in the 34 existing sweep runs maps to a known ID.
+  Scores and verdicts are unchanged.
 - Lab rows of signed samples record the reasons behind `score_if_valid`
   (`breakdown_if_valid`), so each rule's firing on signed malware can be
   compared with validly signed benign software, where the lab cannot check
